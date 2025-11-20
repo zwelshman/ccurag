@@ -27,7 +27,10 @@ def main():
 
         # Fetch and index all repositories
         logger.info("Fetching repositories and their contents...")
-        documents = indexer.index_all_repos()
+        sample_size = Config.SAMPLE_REPOS
+        if sample_size:
+            logger.info(f"Sampling {sample_size} random repositories (Config.SAMPLE_REPOS={sample_size})")
+        documents = indexer.index_all_repos(sample_size=sample_size)
 
         if not documents:
             logger.error("No documents found to index!")

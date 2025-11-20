@@ -1,6 +1,7 @@
 """GitHub repository indexing functionality."""
 
 import logging
+import random
 from typing import List, Dict, Optional
 from github import Github, GithubException
 from config import Config
@@ -17,8 +18,13 @@ class GitHubIndexer:
         self.github = Github(github_token) if github_token else Github()
         self.org_name = Config.GITHUB_ORG
 
-    def get_all_repos(self) -> List[Dict]:
-        """Fetch all repositories from the organization."""
+    def get_all_repos(self, sample_size: Optional[int] = None) -> List[Dict]:
+        """Fetch all repositories from the organization.
+
+        Args:
+            sample_size: If provided, randomly sample this many repositories.
+                        If None, fetch all repositories.
+        """
         try:
             org = self.github.get_organization(self.org_name)
             repos = org.get_repos()
@@ -38,6 +44,13 @@ class GitHubIndexer:
                 logger.info(f"Found repo: {repo.name}")
 
             logger.info(f"Total repositories found: {len(repo_list)}")
+
+            # Sample repositories if requested
+            if sample_size is not None and sample_size < len(repo_list):
+                original_count = len(repo_list)
+                repo_list = random.sample(repo_list, sample_size)
+                logger.info(f"Sampled {sample_size} repositories from {original_count} total")
+
             return repo_list
 
         except GithubException as e:
@@ -112,10 +125,15 @@ class GitHubIndexer:
             logger.error(f"Error fetching repo contents for {repo_full_name}: {e}")
             return documents
 
-    def index_all_repos(self) -> List[Dict]:
-        """Index all repositories in the organization."""
+    def index_all_repos(self, sample_size: Optional[int] = None) -> List[Dict]:
+        """Index all repositories in the organization.
+
+        Args:
+            sample_size: If provided, randomly sample this many repositories.
+                        If None, index all repositories.
+        """
         all_documents = []
-        repos = self.get_all_repos()
+        repos = self.get_all_repos(sample_size=sample_size)
 
         for i, repo in enumerate(repos, 1):
             logger.info(f"Indexing repo {i}/{len(repos)}: {repo['full_name']}")
