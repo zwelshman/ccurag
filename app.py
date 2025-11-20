@@ -25,8 +25,24 @@ st.set_page_config(
 
 def check_vector_store_exists():
     """Check if vector store exists."""
-    db_path = Path(Config.CHROMA_DB_DIR)
-    return db_path.exists() and any(db_path.iterdir())
+    backend = Config.VECTOR_STORE_BACKEND.lower()
+
+    if backend == "pinecone":
+        # Check if Pinecone index exists
+        try:
+            from pinecone import Pinecone
+            pc = Pinecone(api_key=Config.PINECONE_API_KEY)
+            existing_indexes = [index.name for index in pc.list_indexes()]
+            return Config.PINECONE_INDEX_NAME in existing_indexes
+        except Exception as e:
+            logger.error(f"Error checking Pinecone index: {e}")
+            return False
+    elif backend == "chroma":
+        # Check if ChromaDB directory exists
+        db_path = Path(Config.CHROMA_DB_DIR)
+        return db_path.exists() and any(db_path.iterdir())
+    else:
+        return False
 
 
 @st.cache_resource
@@ -165,19 +181,27 @@ def render_admin_page():
     """Render the admin/setup page."""
     st.title("⚙️ Setup & Administration")
 
-    st.info(
-        """
-        **Note for Streamlit Cloud Users:**
+    # Show info based on backend
+    if Config.VECTOR_STORE_BACKEND == "pinecone":
+        st.success(
+            """
+            **Using Pinecone Cloud Vector Database**
 
-        Streamlit Cloud doesn't have persistent storage, so the vector database will be lost when the app restarts.
-        You'll need to re-index the repositories after each deployment or app restart.
+            Your vector database is stored in Pinecone cloud and persists across app restarts.
+            You only need to index repositories once, and the data will remain available.
+            """
+        )
+    else:
+        st.info(
+            """
+            **Note for Streamlit Cloud Users:**
 
-        For production use, consider:
-        - Using a cloud vector database (Pinecone, Weaviate, etc.)
-        - Pre-building the index and uploading it
-        - Using a persistent storage solution
-        """
-    )
+            Streamlit Cloud doesn't have persistent storage, so the vector database will be lost when the app restarts.
+            You'll need to re-index the repositories after each deployment or app restart.
+
+            For production use, consider switching to Pinecone backend (set VECTOR_STORE_BACKEND=pinecone).
+            """
+        )
 
     st.divider()
 
@@ -190,13 +214,24 @@ def render_admin_page():
         st.subheader("📊 Current Status")
         if db_exists:
             st.success("✅ Vector store is ready")
-            db_path = Path(Config.CHROMA_DB_DIR)
             try:
                 # Try to get some stats
                 from vector_store import VectorStoreManager
                 vsm = VectorStoreManager()
                 vsm.load_vectorstore()
-                st.metric("Database Location", Config.CHROMA_DB_DIR)
+
+                if Config.VECTOR_STORE_BACKEND == "pinecone":
+                    st.metric("Backend", "Pinecone Cloud")
+                    st.metric("Index Name", Config.PINECONE_INDEX_NAME)
+                    try:
+                        stats = vsm.get_stats()
+                        vector_count = stats.get('total_vector_count', 0)
+                        st.metric("Total Vectors", f"{vector_count:,}")
+                    except:
+                        pass
+                else:
+                    st.metric("Backend", "ChromaDB (Local)")
+                    st.metric("Database Location", Config.CHROMA_DB_DIR)
             except Exception as e:
                 st.warning(f"Vector store exists but couldn't load stats: {e}")
         else:
@@ -228,13 +263,15 @@ def render_admin_page():
                 help="Enable this to index only 20 random repositories instead of all repositories. Useful for quick testing."
             )
 
+            backend_name = "Pinecone" if Config.VECTOR_STORE_BACKEND == "pinecone" else "ChromaDB"
+
             if st.session_state.sample_repos:
                 st.warning(
-                    """
+                    f"""
                     **This will:**
                     - Fetch 20 random repositories from BHFDSC GitHub organization
                     - Download README files and code files
-                    - Create embeddings and store them in ChromaDB
+                    - Create embeddings and store them in {backend_name}
                     - Take approximately 2-5 minutes
 
                     **Proceed?**
@@ -242,11 +279,11 @@ def render_admin_page():
                 )
             else:
                 st.warning(
-                    """
+                    f"""
                     **This will:**
                     - Fetch all repositories from BHFDSC GitHub organization
                     - Download README files and code files
-                    - Create embeddings and store them in ChromaDB
+                    - Create embeddings and store them in {backend_name}
                     - Take approximately 10-30 minutes
 
                     **Proceed?**
@@ -285,11 +322,20 @@ def render_admin_page():
         if db_exists:
             st.divider()
             if st.button("🗑️ Delete Vector Store", type="secondary", use_container_width=True):
-                db_path = Path(Config.CHROMA_DB_DIR)
-                shutil.rmtree(db_path)
-                st.success("Vector store deleted.")
-                st.cache_resource.clear()
-                st.rerun()
+                try:
+                    if Config.VECTOR_STORE_BACKEND == "pinecone":
+                        from vector_store import VectorStoreManager
+                        vsm = VectorStoreManager()
+                        vsm.delete_vectorstore()
+                        st.success("Pinecone index deleted.")
+                    else:
+                        db_path = Path(Config.CHROMA_DB_DIR)
+                        shutil.rmtree(db_path)
+                        st.success("ChromaDB vector store deleted.")
+                    st.cache_resource.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error deleting vector store: {e}")
 
     st.divider()
     st.subheader("📋 Configuration")

@@ -39,11 +39,22 @@ class Config:
     GITHUB_ORG = get_secret("GITHUB_ORG", "BHFDSC")
 
     # Vector Store Settings
+    VECTOR_STORE_BACKEND = get_secret("VECTOR_STORE_BACKEND", "pinecone")  # "pinecone" or "chroma"
+
+    # ChromaDB Settings (legacy)
     CHROMA_DB_DIR = "chroma_db"
     COLLECTION_NAME = "bhfdsc_repos"
 
+    # Pinecone Settings
+    PINECONE_API_KEY = get_secret("PINECONE_API_KEY")
+    PINECONE_INDEX_NAME = get_secret("PINECONE_INDEX_NAME", "ccuindex")
+    PINECONE_CLOUD = get_secret("PINECONE_CLOUD", "aws")
+    PINECONE_REGION = get_secret("PINECONE_REGION", "us-east-1")
+    PINECONE_DIMENSION = int(get_secret("PINECONE_DIMENSION", "384"))
+
     # Model Settings
     ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
+    EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # 384 dimensions
 
     # Chunking Settings
     CHUNK_SIZE = 1000
@@ -69,4 +80,13 @@ class Config:
                 "ANTHROPIC_API_KEY is required. "
                 "Set it in .env file (local) or Streamlit secrets (cloud)."
             )
+
+        # Validate vector store configuration
+        if cls.VECTOR_STORE_BACKEND == "pinecone":
+            if not cls.PINECONE_API_KEY:
+                raise ValueError(
+                    "PINECONE_API_KEY is required when using Pinecone backend. "
+                    "Set it in .env file (local) or Streamlit secrets (cloud)."
+                )
+
         return True
