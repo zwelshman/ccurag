@@ -11,3 +11,4 @@ ENV/
 chroma_db/
 *.log
 .DS_Store
+.checkpoint.json

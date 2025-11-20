@@ -21,16 +21,17 @@ def main():
         Config.validate()
 
         logger.info(f"Starting indexing process for organization: {Config.GITHUB_ORG}")
+        logger.info("Note: Progress is automatically saved. If interrupted, simply re-run to resume.")
 
         # Initialize GitHub indexer
         indexer = GitHubIndexer(github_token=Config.GITHUB_TOKEN)
 
-        # Fetch and index all repositories
+        # Fetch and index all repositories (with automatic resume support)
         logger.info("Fetching repositories and their contents...")
         sample_size = Config.SAMPLE_REPOS
         if sample_size:
             logger.info(f"Sampling {sample_size} random repositories (Config.SAMPLE_REPOS={sample_size})")
-        documents = indexer.index_all_repos(sample_size=sample_size)
+        documents = indexer.index_all_repos(sample_size=sample_size, resume=True)
 
         if not documents:
             logger.error("No documents found to index!")
@@ -61,8 +62,15 @@ def main():
         logger.info(f"Vector store saved to: {Config.CHROMA_DB_DIR}")
         logger.info("You can now run the Streamlit app: streamlit run app.py")
 
+    except KeyboardInterrupt:
+        logger.info("\n\nIndexing interrupted by user.")
+        logger.info("Progress has been saved to .checkpoint.json")
+        logger.info("Run this script again to resume from where you left off.")
+        sys.exit(0)
     except Exception as e:
         logger.error(f"Error during indexing: {e}", exc_info=True)
+        logger.info("\nProgress has been saved to .checkpoint.json")
+        logger.info("Run this script again to resume from where you left off.")
         sys.exit(1)
 
 
