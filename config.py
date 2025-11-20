@@ -43,7 +43,7 @@ class Config:
     COLLECTION_NAME = "bhfdsc_repos"
 
     # Model Settings
-    ANTHROPIC_MODEL = "claude-3-5-sonnet-20241022"
+    ANTHROPIC_MODEL = "claude-4-5-haiku"
 
     # Chunking Settings
     CHUNK_SIZE = 1000
