@@ -9,6 +9,8 @@ A Retrieval-Augmented Generation (RAG) application that enables users to ask que
 - **Source Attribution**: Shows which repositories and files were used to generate each answer
 - **Interactive UI**: Simple Streamlit interface for asking questions
 - **Supports Multiple File Types**: Indexes Markdown, Python, R, Jupyter notebooks, and more
+- **Easy Deployment**: Works both locally and on Streamlit Cloud
+- **Built-in Setup Page**: Index repositories directly from the web interface
 
 ## Architecture
 
@@ -68,25 +70,43 @@ GITHUB_TOKEN=your_github_token_here  # Optional
 GITHUB_ORG=BHFDSC
 ```
 
-## Usage
+## Quick Start
 
-### Step 1: Index the Repositories
+### Option 1: Deploy to Streamlit Cloud (Recommended for Quick Testing)
 
-Before running the application, you need to index all repositories from the BHFDSC organization:
+1. Fork this repository
+2. Go to [share.streamlit.io](https://share.streamlit.io)
+3. Deploy the `app.py` file
+4. Add your `ANTHROPIC_API_KEY` in the Streamlit secrets settings
+5. Use the built-in "Setup" page to index repositories
 
+📖 See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
+
+### Option 2: Run Locally
+
+#### Step 1: Index the Repositories
+
+You can index repositories either via the UI or command line:
+
+**Via UI (Recommended):**
+1. Start the app: `streamlit run app.py`
+2. Go to the "Setup" page
+3. Click "Index/Re-index Repositories"
+
+**Via Command Line:**
 ```bash
 python index_repos.py
 ```
 
-This will:
-- Fetch all repositories from the BHFDSC organization
+This process will:
+- Fetch all repositories from the BHFDSC organization (~100 repos)
 - Download README files and other relevant files
 - Create embeddings and store them in ChromaDB
 - Save the vector store to the `chroma_db/` directory
 
-**Note**: This process may take 10-30 minutes depending on the number of repositories and your internet connection.
+**Note**: Indexing takes 10-30 minutes depending on your internet connection.
 
-### Step 2: Run the Streamlit App
+#### Step 2: Run the Streamlit App
 
 Once indexing is complete, start the Streamlit application:
 
@@ -96,7 +116,7 @@ streamlit run app.py
 
 The app will open in your browser at `http://localhost:8501`.
 
-### Step 3: Ask Questions
+#### Step 3: Ask Questions
 
 Type your questions in the chat interface. Example questions:
 
@@ -105,6 +125,14 @@ Type your questions in the chat interface. Example questions:
 - "What phenotyping algorithms are used in the CCU projects?"
 - "Show me repositories that work with linked electronic health records"
 - "What machine learning methods are used in these projects?"
+
+## Deployment to Streamlit Cloud
+
+The application is designed to work seamlessly on Streamlit Cloud with built-in UI for indexing repositories.
+
+**Important:** Streamlit Cloud doesn't have persistent storage, so you'll need to re-index after app restarts. For production use, consider using a cloud vector database or self-hosting.
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment instructions and best practices.
 
 ## Configuration
 
