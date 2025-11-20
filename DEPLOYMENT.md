@@ -4,22 +4,23 @@ This guide explains how to deploy the BHFDSC Q&A application to Streamlit Cloud.
 
 ## Important Notes on Streamlit Cloud Deployment
 
-### Persistent Storage Limitation
+### Vector Database Backend
 
-**Critical:** Streamlit Cloud does not provide persistent file storage. This means:
+**Recommended:** Use **Pinecone** (default) for production deployments on Streamlit Cloud.
 
-- The vector database (`chroma_db/`) will be lost when the app restarts
-- You'll need to re-index repositories after each deployment or restart
-- Indexing takes 10-30 minutes each time
+Pinecone provides:
+- ✅ Persistent cloud storage (data survives app restarts)
+- ✅ Fast similarity search with low latency
+- ✅ Free tier (100k vectors, suitable for testing)
+- ✅ No re-indexing needed after app restarts
+- ✅ Simple setup with API key
 
-### Solutions for Production
+**Alternative:** ChromaDB (local) can be used for development but:
+- ⚠️ Streamlit Cloud does not provide persistent file storage
+- ⚠️ The vector database (`chroma_db/`) is lost when the app restarts
+- ⚠️ Requires re-indexing after each deployment (10-30 minutes)
 
-For production deployments, consider these alternatives:
-
-1. **Cloud Vector Database**: Use Pinecone, Weaviate, or Qdrant instead of ChromaDB
-2. **Pre-built Index**: Build the index locally and commit it to your repository (if size permits)
-3. **External Storage**: Use cloud storage (S3, GCS) to persist the vector database
-4. **Self-hosting**: Deploy on a platform with persistent storage (Heroku, DigitalOcean, AWS, etc.)
+See [PINECONE_SETUP.md](PINECONE_SETUP.md) for Pinecone configuration instructions.
 
 ## Deployment Steps
 
@@ -27,7 +28,8 @@ For production deployments, consider these alternatives:
 
 - GitHub account
 - Streamlit Cloud account (free at [share.streamlit.io](https://share.streamlit.io))
-- Anthropic API key
+- Anthropic API key ([Get one](https://console.anthropic.com/))
+- Pinecone API key ([Get one](https://www.pinecone.io/)) - Recommended for production
 
 ### 2. Push Code to GitHub
 
@@ -51,8 +53,20 @@ In the Streamlit Cloud dashboard:
 2. Go to "Settings" → "Secrets"
 3. Add your secrets in TOML format:
 
+**For Pinecone (Recommended):**
 ```toml
 ANTHROPIC_API_KEY = "your_anthropic_api_key_here"
+PINECONE_API_KEY = "your_pinecone_api_key_here"
+PINECONE_INDEX_NAME = "ccuindex"
+VECTOR_STORE_BACKEND = "pinecone"
+GITHUB_TOKEN = "your_github_token_here"  # Optional but recommended
+GITHUB_ORG = "BHFDSC"
+```
+
+**For ChromaDB (Local Development Only):**
+```toml
+ANTHROPIC_API_KEY = "your_anthropic_api_key_here"
+VECTOR_STORE_BACKEND = "chroma"
 GITHUB_TOKEN = "your_github_token_here"  # Optional but recommended
 GITHUB_ORG = "BHFDSC"
 ```
@@ -68,6 +82,8 @@ After deployment:
 3. Click "Index/Re-index Repositories"
 4. Confirm and wait 10-30 minutes for indexing to complete
 5. Once complete, go to the "Q&A" page to start asking questions
+
+**Note:** With Pinecone, you only need to index once. The data persists across app restarts and deployments.
 
 ## Configuration Options
 
@@ -94,9 +110,9 @@ The `requirements.txt` file is already configured with all necessary dependencie
 ## Limitations on Streamlit Cloud
 
 1. **Memory**: 1 GB RAM (may need to reduce `MAX_FILES_PER_REPO` in config.py)
-2. **Storage**: No persistent storage (vector DB is lost on restart)
+2. **Storage**: No persistent file storage for ChromaDB (use Pinecone for persistence)
 3. **CPU**: Limited CPU resources (indexing may be slower)
-4. **Timeout**: Long-running operations may timeout
+4. **Timeout**: Long-running operations may timeout during initial indexing
 
 ## Optimizations for Streamlit Cloud
 

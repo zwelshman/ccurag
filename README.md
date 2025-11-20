@@ -116,10 +116,10 @@ python index_repos.py
 This process will:
 - Fetch all repositories from the BHFDSC organization (~100 repos)
 - Download README files and other relevant files
-- Create embeddings and store them in ChromaDB
-- Save the vector store to the `chroma_db/` directory
+- Create embeddings and store them in your configured vector store (Pinecone or ChromaDB)
+- Track progress with checkpoint/resume capability
 
-**Note**: Indexing takes 10-30 minutes depending on your internet connection.
+**Note**: Indexing takes 10-30 minutes depending on your internet connection and vector store backend.
 
 #### Step 2: Run the Streamlit App
 
@@ -145,57 +145,46 @@ Type your questions in the chat interface. Example questions:
 
 The application is designed to work seamlessly on Streamlit Cloud with built-in UI for indexing repositories.
 
-**Important:** Streamlit Cloud doesn't have persistent storage, so you'll need to re-index after app restarts. For production use, consider using a cloud vector database or self-hosting.
+**Recommended:** Use Pinecone (default) for production deployments. Pinecone is a cloud vector database that provides:
+- Persistent storage across app restarts
+- Fast similarity search
+- Free tier for testing (100k vectors)
+- Simple setup and configuration
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment instructions and best practices.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment instructions and [PINECONE_SETUP.md](PINECONE_SETUP.md) for Pinecone configuration.
 
-### Persistent Vector Database Options
-
-For production deployments or to avoid re-indexing on each restart, we provide several persistent vector database solutions:
-
-📋 **[View Detailed Proposal](PERSISTENT_VECTOR_DB_PROPOSAL.md)** - Comprehensive comparison of all options
-
-**Quick Summary:**
-- 🚀 **Quick Win**: Cloud Storage + ChromaDB sync (S3/GCS/Azure) - Minimal changes, low cost
-- 🏢 **Production**: Pinecone - Fully managed, excellent performance, free tier available
-- 💰 **Budget-Friendly**: Supabase + pgvector - Generous free tier (500MB), PostgreSQL-based
-
-See the `examples/` directory for ready-to-use implementation code:
-- `examples/cloud_storage_sync.py` - Sync ChromaDB with cloud storage
-- `examples/pinecone_backend.py` - Pinecone integration
-- `examples/supabase_backend.py` - Supabase + pgvector integration
-- `examples/README.md` - Detailed integration guide
+**Alternative:** ChromaDB can be used for local development but requires re-indexing on each Streamlit Cloud restart.
 
 ## Configuration
 
 You can customize the application by modifying `config.py`:
 
-- `ANTHROPIC_MODEL`: Change the Claude model (default: claude-3-5-sonnet-20241022)
+- `ANTHROPIC_MODEL`: Change the Claude model (default: claude-haiku-4-5-20251001)
 - `CHUNK_SIZE`: Adjust document chunk size for embeddings
 - `MAX_FILES_PER_REPO`: Limit files indexed per repository
 - `INDEXED_FILE_EXTENSIONS`: Add or remove file types to index
+- `VECTOR_STORE_BACKEND`: Switch between "pinecone" (default) or "chroma"
 
 ## Project Structure
 
 ```
 ccurag/
-├── app.py                          # Streamlit application
-├── config.py                       # Configuration management
-├── github_indexer.py               # GitHub repository fetching
-├── vector_store.py                 # Vector store management (ChromaDB)
-├── qa_chain.py                     # QA system with Anthropic SDK
-├── index_repos.py                  # Script to index repositories
-├── requirements.txt                # Python dependencies
-├── .env.example                    # Example environment variables
-├── .gitignore                      # Git ignore file
-├── README.md                       # This file
-├── PERSISTENT_VECTOR_DB_PROPOSAL.md # Vector database options proposal
-├── examples/                       # Alternative vector database implementations
-│   ├── README.md                   # Integration guide
-│   ├── cloud_storage_sync.py       # Cloud storage sync implementation
-│   ├── pinecone_backend.py         # Pinecone implementation
-│   └── supabase_backend.py         # Supabase + pgvector implementation
-└── chroma_db/                      # Vector store (generated)
+├── app.py                      # Streamlit application
+├── config.py                   # Configuration management
+├── utils.py                    # Shared utilities (Document class, text splitting)
+├── github_indexer.py           # GitHub repository fetching with checkpoint/resume
+├── vector_store.py             # Vector store factory
+├── vector_store_pinecone.py    # Pinecone vector store implementation
+├── vector_store_chroma.py      # ChromaDB vector store implementation (legacy)
+├── qa_chain.py                 # QA system with Anthropic Claude
+├── index_repos.py              # CLI script to index repositories
+├── requirements.txt            # Python dependencies
+├── .env.example                # Example environment variables
+├── .gitignore                  # Git ignore file
+├── README.md                   # This file
+├── DEPLOYMENT.md               # Deployment guide
+├── PINECONE_SETUP.md           # Pinecone setup guide
+└── chroma_db/                  # Local vector store (if using ChromaDB)
 ```
 
 ## How It Works
@@ -203,9 +192,10 @@ ccurag/
 1. **Indexing Phase**:
    - Fetches all repositories from the BHFDSC GitHub organization
    - Downloads README files and selected file types (Python, R, Markdown, etc.)
-   - Splits documents into chunks
+   - Splits documents into chunks (configurable size and overlap)
    - Creates embeddings using Sentence Transformers
-   - Stores embeddings in ChromaDB
+   - Stores embeddings in Pinecone (cloud) or ChromaDB (local)
+   - Supports checkpoint/resume for interrupted indexing
 
 2. **Query Phase**:
    - User asks a question via Streamlit UI
@@ -240,8 +230,9 @@ The indexing process can take time. You can reduce `MAX_FILES_PER_REPO` in `conf
 ## Technologies Used
 
 - **Anthropic Claude**: Advanced AI language model (via Anthropic Python SDK)
-- **ChromaDB**: Vector database for embeddings
-- **Sentence Transformers**: Embedding models
+- **Pinecone**: Cloud vector database for embeddings (default)
+- **ChromaDB**: Local vector database option
+- **Sentence Transformers**: Embedding models (all-MiniLM-L6-v2)
 - **Streamlit**: Web application framework
 - **PyGithub**: GitHub API library
 

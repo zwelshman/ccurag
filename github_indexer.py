@@ -146,21 +146,6 @@ class CheckpointManager:
             return []
         return self.checkpoint_data.get('processed_repos', [])
 
-    def get_repo_commit_sha(self, repo_full_name: str) -> Optional[str]:
-        """Get the stored commit SHA for a repository.
-
-        Args:
-            repo_full_name: Full name of repository
-
-        Returns:
-            Commit SHA if found, None otherwise
-        """
-        if not self.checkpoint_data:
-            return None
-        repos_metadata = self.checkpoint_data.get('repos_metadata', {})
-        repo_info = repos_metadata.get(repo_full_name, {})
-        return repo_info.get('commit_sha')
-
     def has_repo_changed(self, repo_full_name: str, current_commit_sha: str) -> bool:
         """Check if a repository has changed since last indexing.
 
@@ -171,10 +156,14 @@ class CheckpointManager:
         Returns:
             True if repo has changed or is new, False if unchanged
         """
-        stored_sha = self.get_repo_commit_sha(repo_full_name)
-        if stored_sha is None:
-            return True  # New repo
-        return stored_sha != current_commit_sha
+        if not self.checkpoint_data:
+            return True
+
+        repos_metadata = self.checkpoint_data.get('repos_metadata', {})
+        repo_info = repos_metadata.get(repo_full_name, {})
+        stored_sha = repo_info.get('commit_sha')
+
+        return stored_sha is None or stored_sha != current_commit_sha
 
     def delete(self):
         """Delete checkpoint file."""

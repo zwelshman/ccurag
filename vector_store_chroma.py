@@ -6,16 +6,10 @@ import chromadb
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
 from config import Config
+from utils import Document, split_text, update_progress
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-class Document:
-    """Simple document class to replace langchain Document."""
-    def __init__(self, page_content: str, metadata: Dict):
-        self.page_content = page_content
-        self.metadata = metadata
 
 
 class ChromaVectorStore:
@@ -27,25 +21,6 @@ class ChromaVectorStore:
         self.client = None
         self.collection = None
 
-    def _split_text(self, text: str, chunk_size: int = None, chunk_overlap: int = None) -> List[str]:
-        """Simple text splitter."""
-        if chunk_size is None:
-            chunk_size = Config.CHUNK_SIZE
-        if chunk_overlap is None:
-            chunk_overlap = Config.CHUNK_OVERLAP
-
-        chunks = []
-        start = 0
-        text_len = len(text)
-
-        while start < text_len:
-            end = start + chunk_size
-            chunk = text[start:end]
-            chunks.append(chunk)
-            start = end - chunk_overlap
-
-        return chunks
-
     def create_vectorstore(self, documents: List[Dict], progress_callback=None):
         """Create a vector store from documents.
 
@@ -54,17 +29,7 @@ class ChromaVectorStore:
             progress_callback: Optional callback function(message: str, progress_pct: float)
         """
         logger.info(f"Processing {len(documents)} documents...")
-
-        def update_progress(msg: str, pct: float):
-            """Helper to update progress via callback or logging."""
-            logger.info(msg)
-            if progress_callback:
-                try:
-                    progress_callback(msg, pct)
-                except:
-                    pass  # Ignore callback errors
-
-        update_progress(f"Processing {len(documents)} documents...", 0.0)
+        update_progress(f"Processing {len(documents)} documents...", 0.0, progress_callback)
 
         # Initialize ChromaDB client
         self.client = chromadb.PersistentClient(
@@ -83,14 +48,14 @@ class ChromaVectorStore:
             metadata={"hnsw:space": "cosine"}
         )
 
-        update_progress("Initialized database", 0.05)
+        update_progress("Initialized database", 0.05, progress_callback)
 
         # Process and split documents
         all_texts = []
         all_metadatas = []
         all_ids = []
 
-        update_progress("Splitting documents into chunks...", 0.1)
+        update_progress("Splitting documents into chunks...", 0.1, progress_callback)
         chunk_id = 0
 
         for doc_idx, doc in enumerate(documents):
@@ -98,7 +63,7 @@ class ChromaVectorStore:
             metadata = doc["metadata"]
 
             # Split text into chunks
-            chunks = self._split_text(content)
+            chunks = split_text(content)
 
             for chunk in chunks:
                 if chunk.strip():  # Only add non-empty chunks
@@ -110,12 +75,12 @@ class ChromaVectorStore:
             # Update progress during chunking (10% to 30%)
             if doc_idx % 10 == 0:
                 pct = 0.1 + (doc_idx / len(documents)) * 0.2
-                update_progress(f"Chunking: {doc_idx}/{len(documents)} documents", pct)
+                update_progress(f"Chunking: {doc_idx}/{len(documents)} documents", pct, progress_callback)
 
-        update_progress(f"Created {len(all_texts)} chunks", 0.3)
+        update_progress(f"Created {len(all_texts)} chunks", 0.3, progress_callback)
 
         # Add to collection in batches
-        update_progress("Creating embeddings and adding to vector store...", 0.35)
+        update_progress("Creating embeddings and adding to vector store...", 0.35, progress_callback)
         batch_size = 100
         total_batches = (len(all_texts) + batch_size - 1) // batch_size
 
@@ -138,9 +103,9 @@ class ChromaVectorStore:
 
             # Update progress (35% to 95%)
             pct = 0.35 + (batch_num / total_batches) * 0.6
-            update_progress(f"Adding batch {batch_num}/{total_batches} to vector store", pct)
+            update_progress(f"Adding batch {batch_num}/{total_batches} to vector store", pct, progress_callback)
 
-        update_progress("Vector store created successfully!", 1.0)
+        update_progress("Vector store created successfully!", 1.0, progress_callback)
         return self.collection
 
     def load_vectorstore(self):

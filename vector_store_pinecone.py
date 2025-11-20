@@ -6,16 +6,10 @@ from typing import List, Dict
 from sentence_transformers import SentenceTransformer
 from pinecone import Pinecone, ServerlessSpec
 from config import Config
+from utils import Document, split_text, update_progress
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-class Document:
-    """Simple document class to replace langchain Document."""
-    def __init__(self, page_content: str, metadata: Dict):
-        self.page_content = page_content
-        self.metadata = metadata
 
 
 class PineconeVectorStore:
@@ -36,25 +30,6 @@ class PineconeVectorStore:
         self.pc = Pinecone(api_key=self.api_key)
         self.index = None
 
-    def _split_text(self, text: str, chunk_size: int = None, chunk_overlap: int = None) -> List[str]:
-        """Simple text splitter."""
-        if chunk_size is None:
-            chunk_size = Config.CHUNK_SIZE
-        if chunk_overlap is None:
-            chunk_overlap = Config.CHUNK_OVERLAP
-
-        chunks = []
-        start = 0
-        text_len = len(text)
-
-        while start < text_len:
-            end = start + chunk_size
-            chunk = text[start:end]
-            chunks.append(chunk)
-            start = end - chunk_overlap
-
-        return chunks
-
     def create_vectorstore(self, documents: List[Dict], progress_callback=None):
         """
         Create a vector store from documents.
@@ -64,17 +39,7 @@ class PineconeVectorStore:
             progress_callback: Optional callback function(message: str, progress_pct: float)
         """
         logger.info(f"Processing {len(documents)} documents for Pinecone...")
-
-        def update_progress(msg: str, pct: float):
-            """Helper to update progress."""
-            logger.info(msg)
-            if progress_callback:
-                try:
-                    progress_callback(msg, pct)
-                except Exception:
-                    pass
-
-        update_progress(f"Processing {len(documents)} documents...", 0.0)
+        update_progress(f"Processing {len(documents)} documents...", 0.0, progress_callback)
 
         # Create index only if it doesn't exist
         try:
@@ -97,10 +62,10 @@ class PineconeVectorStore:
                     logger.info("Waiting for index to be ready...")
                     time.sleep(1)
 
-                update_progress("Index created successfully", 0.05)
+                update_progress("Index created successfully", 0.05, progress_callback)
             else:
                 logger.info(f"Using existing Pinecone index: {self.index_name}")
-                update_progress("Connected to existing index", 0.05)
+                update_progress("Connected to existing index", 0.05, progress_callback)
 
         except Exception as e:
             logger.error(f"Error creating index: {e}")
@@ -108,14 +73,14 @@ class PineconeVectorStore:
 
         # Connect to index
         self.index = self.pc.Index(self.index_name)
-        update_progress("Connected to index", 0.1)
+        update_progress("Connected to index", 0.1, progress_callback)
 
         # Process and split documents
         all_texts = []
         all_metadatas = []
         all_ids = []
 
-        update_progress("Splitting documents into chunks...", 0.15)
+        update_progress("Splitting documents into chunks...", 0.15, progress_callback)
         chunk_id = 0
 
         for doc_idx, doc in enumerate(documents):
@@ -123,7 +88,7 @@ class PineconeVectorStore:
             metadata = doc["metadata"]
 
             # Split text into chunks
-            chunks = self._split_text(content)
+            chunks = split_text(content)
 
             for chunk in chunks:
                 if chunk.strip():
@@ -135,12 +100,12 @@ class PineconeVectorStore:
             # Update progress during chunking (15% to 30%)
             if doc_idx % 10 == 0:
                 pct = 0.15 + (doc_idx / len(documents)) * 0.15
-                update_progress(f"Chunking: {doc_idx}/{len(documents)} documents", pct)
+                update_progress(f"Chunking: {doc_idx}/{len(documents)} documents", pct, progress_callback)
 
-        update_progress(f"Created {len(all_texts)} chunks", 0.3)
+        update_progress(f"Created {len(all_texts)} chunks", 0.3, progress_callback)
 
         # Create embeddings and upsert in batches
-        update_progress("Creating embeddings and uploading to Pinecone...", 0.35)
+        update_progress("Creating embeddings and uploading to Pinecone...", 0.35, progress_callback)
         batch_size = 100
         total_batches = (len(all_texts) + batch_size - 1) // batch_size
 
@@ -166,9 +131,9 @@ class PineconeVectorStore:
 
             # Update progress (35% to 95%)
             pct = 0.35 + (batch_num / total_batches) * 0.6
-            update_progress(f"Uploading batch {batch_num}/{total_batches} to Pinecone", pct)
+            update_progress(f"Uploading batch {batch_num}/{total_batches} to Pinecone", pct, progress_callback)
 
-        update_progress("Vector store created successfully!", 1.0)
+        update_progress("Vector store created successfully!", 1.0, progress_callback)
         logger.info(f"Successfully indexed {len(all_texts)} chunks to Pinecone")
         return self.index
 
@@ -271,36 +236,26 @@ class PineconeVectorStore:
             progress_callback: Optional callback function(message: str, progress_pct: float)
         """
         logger.info(f"Upserting {len(documents)} documents to Pinecone...")
-
-        def update_progress(msg: str, pct: float):
-            """Helper to update progress."""
-            logger.info(msg)
-            if progress_callback:
-                try:
-                    progress_callback(msg, pct)
-                except Exception:
-                    pass
-
-        update_progress(f"Upserting {len(documents)} documents...", 0.0)
+        update_progress(f"Upserting {len(documents)} documents...", 0.0, progress_callback)
 
         # Load existing index
         if self.index is None:
             self.load_vectorstore()
-        update_progress("Connected to index", 0.05)
+        update_progress("Connected to index", 0.05, progress_callback)
 
         # Delete old vectors for repos that are being updated
         if repos_to_update:
-            update_progress(f"Deleting old vectors for {len(repos_to_update)} repos...", 0.1)
+            update_progress(f"Deleting old vectors for {len(repos_to_update)} repos...", 0.1, progress_callback)
             for repo_name in repos_to_update:
                 self.delete_repo_vectors(repo_name)
-            update_progress("Old vectors deleted", 0.2)
+            update_progress("Old vectors deleted", 0.2, progress_callback)
 
         # Process and split documents (similar to create_vectorstore)
         all_texts = []
         all_metadatas = []
         all_ids = []
 
-        update_progress("Splitting documents into chunks...", 0.25)
+        update_progress("Splitting documents into chunks...", 0.25, progress_callback)
         chunk_id = int(time.time() * 1000)  # Use timestamp to avoid ID collisions
 
         for doc_idx, doc in enumerate(documents):
@@ -308,7 +263,7 @@ class PineconeVectorStore:
             metadata = doc["metadata"]
 
             # Split text into chunks
-            chunks = self._split_text(content)
+            chunks = split_text(content)
 
             for chunk in chunks:
                 if chunk.strip():
@@ -320,12 +275,12 @@ class PineconeVectorStore:
             # Update progress during chunking (25% to 40%)
             if doc_idx % 10 == 0:
                 pct = 0.25 + (doc_idx / len(documents)) * 0.15
-                update_progress(f"Chunking: {doc_idx}/{len(documents)} documents", pct)
+                update_progress(f"Chunking: {doc_idx}/{len(documents)} documents", pct, progress_callback)
 
-        update_progress(f"Created {len(all_texts)} chunks", 0.4)
+        update_progress(f"Created {len(all_texts)} chunks", 0.4, progress_callback)
 
         # Create embeddings and upsert in batches
-        update_progress("Creating embeddings and uploading to Pinecone...", 0.45)
+        update_progress("Creating embeddings and uploading to Pinecone...", 0.45, progress_callback)
         batch_size = 100
         total_batches = (len(all_texts) + batch_size - 1) // batch_size
 
@@ -351,8 +306,8 @@ class PineconeVectorStore:
 
             # Update progress (45% to 95%)
             pct = 0.45 + (batch_num / total_batches) * 0.5
-            update_progress(f"Uploading batch {batch_num}/{total_batches} to Pinecone", pct)
+            update_progress(f"Uploading batch {batch_num}/{total_batches} to Pinecone", pct, progress_callback)
 
-        update_progress("Documents upserted successfully!", 1.0)
+        update_progress("Documents upserted successfully!", 1.0, progress_callback)
         logger.info(f"Successfully upserted {len(all_texts)} chunks to Pinecone")
         return self.index
