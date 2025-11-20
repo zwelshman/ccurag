@@ -46,9 +46,25 @@ class VectorStoreManager:
 
         return chunks
 
-    def create_vectorstore(self, documents: List[Dict]):
-        """Create a vector store from documents."""
+    def create_vectorstore(self, documents: List[Dict], progress_callback=None):
+        """Create a vector store from documents.
+
+        Args:
+            documents: List of documents to index
+            progress_callback: Optional callback function(message: str, progress_pct: float)
+        """
         logger.info(f"Processing {len(documents)} documents...")
+
+        def update_progress(msg: str, pct: float):
+            """Helper to update progress via callback or logging."""
+            logger.info(msg)
+            if progress_callback:
+                try:
+                    progress_callback(msg, pct)
+                except:
+                    pass  # Ignore callback errors
+
+        update_progress(f"Processing {len(documents)} documents...", 0.0)
 
         # Initialize ChromaDB client
         self.client = chromadb.PersistentClient(
@@ -67,15 +83,17 @@ class VectorStoreManager:
             metadata={"hnsw:space": "cosine"}
         )
 
+        update_progress("Initialized database", 0.05)
+
         # Process and split documents
         all_texts = []
         all_metadatas = []
         all_ids = []
 
-        logger.info("Splitting documents into chunks...")
+        update_progress("Splitting documents into chunks...", 0.1)
         chunk_id = 0
 
-        for doc in documents:
+        for doc_idx, doc in enumerate(documents):
             content = doc["content"]
             metadata = doc["metadata"]
 
@@ -89,13 +107,20 @@ class VectorStoreManager:
                     all_ids.append(f"doc_{chunk_id}")
                     chunk_id += 1
 
-        logger.info(f"Created {len(all_texts)} chunks")
+            # Update progress during chunking (10% to 30%)
+            if doc_idx % 10 == 0:
+                pct = 0.1 + (doc_idx / len(documents)) * 0.2
+                update_progress(f"Chunking: {doc_idx}/{len(documents)} documents", pct)
+
+        update_progress(f"Created {len(all_texts)} chunks", 0.3)
 
         # Add to collection in batches
-        logger.info("Creating embeddings and adding to vector store...")
+        update_progress("Creating embeddings and adding to vector store...", 0.35)
         batch_size = 100
+        total_batches = (len(all_texts) + batch_size - 1) // batch_size
 
         for i in range(0, len(all_texts), batch_size):
+            batch_num = i // batch_size + 1
             batch_texts = all_texts[i:i + batch_size]
             batch_metadata = all_metadatas[i:i + batch_size]
             batch_ids = all_ids[i:i + batch_size]
@@ -111,9 +136,11 @@ class VectorStoreManager:
                 ids=batch_ids
             )
 
-            logger.info(f"Added batch {i // batch_size + 1}/{(len(all_texts) + batch_size - 1) // batch_size}")
+            # Update progress (35% to 95%)
+            pct = 0.35 + (batch_num / total_batches) * 0.6
+            update_progress(f"Adding batch {batch_num}/{total_batches} to vector store", pct)
 
-        logger.info("Vector store created successfully")
+        update_progress("Vector store created successfully!", 1.0)
         return self.collection
 
     def load_vectorstore(self):

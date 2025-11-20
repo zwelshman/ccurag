@@ -54,40 +54,104 @@ def load_qa_system():
 def run_indexing():
     """Run the repository indexing process."""
     try:
-        # Initialize GitHub indexer
+        # Create progress indicators
+        progress_bar = st.progress(0, text="Starting indexing process...")
+        status_text = st.empty()
+        details_expander = st.expander("📋 Detailed Progress", expanded=True)
+
+        with details_expander:
+            repo_status = st.empty()
+            doc_status = st.empty()
+            embedding_status = st.empty()
+
+        # Phase 1: Fetch repositories
+        status_text.info("🔍 **Phase 1/3:** Fetching repository list from BHFDSC...")
         indexer = GitHubIndexer(github_token=Config.GITHUB_TOKEN)
 
-        # Fetch and index all repositories
-        progress_bar = st.progress(0)
-        status_text = st.empty()
+        repos = indexer.get_all_repos()
+        total_repos = len(repos)
 
-        status_text.text("Fetching repositories from BHFDSC organization...")
-        documents = indexer.index_all_repos()
-        progress_bar.progress(50)
+        with details_expander:
+            repo_status.success(f"✅ Found {total_repos} repositories")
 
-        if not documents:
+        progress_bar.progress(10, text=f"Found {total_repos} repositories")
+
+        # Phase 2: Index repository contents
+        status_text.info(f"📥 **Phase 2/3:** Indexing contents from {total_repos} repositories...")
+
+        all_documents = []
+        for i, repo in enumerate(repos, 1):
+            progress_pct = 10 + int((i / total_repos) * 40)  # 10% to 50%
+            progress_bar.progress(
+                progress_pct,
+                text=f"Indexing repo {i}/{total_repos}: {repo['name']}"
+            )
+
+            with details_expander:
+                repo_status.info(f"📂 Processing: **{repo['name']}** ({i}/{total_repos})")
+
+            # Add repo metadata
+            repo_doc = {
+                "content": f"Repository: {repo['name']}\n\nDescription: {repo['description']}\n\nLanguage: {repo['language']}\n\nTopics: {', '.join(repo['topics'])}",
+                "metadata": {
+                    "source": repo['full_name'],
+                    "repo": repo['full_name'],
+                    "type": "repo_info",
+                    "url": repo['url'],
+                }
+            }
+            all_documents.append(repo_doc)
+
+            # Get file contents
+            repo_contents = indexer.get_repo_contents(repo['full_name'])
+            all_documents.extend(repo_contents)
+
+            with details_expander:
+                doc_status.info(f"📄 Total documents collected: **{len(all_documents)}**")
+
+        if not all_documents:
             st.error("No documents found to index!")
             return False
 
-        status_text.text(f"Successfully fetched {len(documents)} documents. Creating vector store...")
+        with details_expander:
+            doc_status.success(f"✅ Collected {len(all_documents)} documents from {total_repos} repositories")
+
+        # Phase 3: Create vector store
+        status_text.info(f"🧮 **Phase 3/3:** Creating vector store from {len(all_documents)} documents...")
+        progress_bar.progress(50, text="Creating vector embeddings...")
 
         # Remove existing database if it exists
         db_path = Path(Config.CHROMA_DB_DIR)
         if db_path.exists():
             shutil.rmtree(Config.CHROMA_DB_DIR)
 
-        # Create vector store
+        # Create vector store with progress updates
         vector_store_manager = VectorStoreManager()
-        vector_store_manager.create_vectorstore(documents)
 
-        progress_bar.progress(100)
-        status_text.text("✅ Indexing completed successfully!")
+        # We'll need to enhance vector_store to show progress, for now show intermediate steps
+        with details_expander:
+            embedding_status.info("🔄 Splitting documents into chunks...")
 
-        st.success(f"Indexed {len(documents)} documents from BHFDSC repositories!")
+        progress_bar.progress(60, text="Splitting documents into chunks...")
+
+        # This will internally handle the chunking and embedding
+        vector_store_manager.create_vectorstore(all_documents, progress_callback=lambda msg, pct: (
+            progress_bar.progress(60 + int(pct * 0.35), text=msg),
+            embedding_status.info(f"🔄 {msg}")
+        ))
+
+        progress_bar.progress(100, text="✅ Indexing complete!")
+        status_text.success("✅ **Indexing completed successfully!**")
+
+        with details_expander:
+            embedding_status.success(f"✅ Vector store created successfully!")
+
+        st.balloons()
+        st.success(f"🎉 Successfully indexed {len(all_documents)} documents from {total_repos} BHFDSC repositories!")
         return True
 
     except Exception as e:
-        st.error(f"Error during indexing: {e}")
+        st.error(f"❌ Error during indexing: {e}")
         logger.error(f"Error during indexing: {e}", exc_info=True)
         return False
 
