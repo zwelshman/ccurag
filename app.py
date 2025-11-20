@@ -68,7 +68,7 @@ def load_qa_system():
 
 
 def run_indexing(sample_size=None):
-    """Run the repository indexing process.
+    """Run the repository indexing process with checkpoint/resume support.
 
     Args:
         sample_size: If provided, randomly sample this many repositories.
@@ -85,10 +85,19 @@ def run_indexing(sample_size=None):
             doc_status = st.empty()
             embedding_status = st.empty()
 
-        # Phase 1: Fetch repositories
-        status_text.info("🔍 **Phase 1/3:** Fetching repository list from BHFDSC...")
+        # Initialize GitHub indexer
         indexer = GitHubIndexer(github_token=Config.GITHUB_TOKEN)
 
+        # Check for existing checkpoint
+        from pathlib import Path as CheckPath
+        checkpoint_file = CheckPath(".checkpoint.json")
+        if checkpoint_file.exists():
+            status_text.info("🔄 **Resuming from previous session...**")
+            with details_expander:
+                repo_status.info("📋 Found checkpoint file - resuming from where we left off")
+
+        # Phase 1: Fetch repositories
+        status_text.info("🔍 **Phase 1/3:** Fetching repository list from BHFDSC...")
         repos = indexer.get_all_repos(sample_size=sample_size)
         total_repos = len(repos)
 
@@ -97,38 +106,15 @@ def run_indexing(sample_size=None):
 
         progress_bar.progress(10, text=f"Found {total_repos} repositories")
 
-        # Phase 2: Index repository contents
+        # Phase 2: Index repository contents (with automatic checkpoint/resume)
         status_text.info(f"📥 **Phase 2/3:** Indexing contents from {total_repos} repositories...")
+        status_text.caption("💾 Progress is automatically saved - you can safely interrupt and resume later")
 
-        all_documents = []
-        for i, repo in enumerate(repos, 1):
-            progress_pct = 10 + int((i / total_repos) * 40)  # 10% to 50%
-            progress_bar.progress(
-                progress_pct,
-                text=f"Indexing repo {i}/{total_repos}: {repo['name']}"
-            )
+        # Use the checkpoint-enabled indexing method
+        all_documents = indexer.index_all_repos(sample_size=sample_size, resume=True)
 
-            with details_expander:
-                repo_status.info(f"📂 Processing: **{repo['name']}** ({i}/{total_repos})")
-
-            # Add repo metadata
-            repo_doc = {
-                "content": f"Repository: {repo['name']}\n\nDescription: {repo['description']}\n\nLanguage: {repo['language']}\n\nTopics: {', '.join(repo['topics'])}",
-                "metadata": {
-                    "source": repo['full_name'],
-                    "repo": repo['full_name'],
-                    "type": "repo_info",
-                    "url": repo['url'],
-                }
-            }
-            all_documents.append(repo_doc)
-
-            # Get file contents
-            repo_contents = indexer.get_repo_contents(repo['full_name'])
-            all_documents.extend(repo_contents)
-
-            with details_expander:
-                doc_status.info(f"📄 Total documents collected: **{len(all_documents)}**")
+        # Update progress bar to completion of phase 2
+        progress_bar.progress(50, text="Repository indexing complete")
 
         if not all_documents:
             st.error("No documents found to index!")
@@ -171,8 +157,13 @@ def run_indexing(sample_size=None):
         st.success(f"🎉 Successfully indexed {len(all_documents)} documents from {total_repos} BHFDSC repositories!")
         return True
 
+    except KeyboardInterrupt:
+        st.warning("⚠️ Indexing interrupted by user")
+        st.info("💾 Progress has been saved. Click 'Index/Re-index Repositories' to resume.")
+        return False
     except Exception as e:
         st.error(f"❌ Error during indexing: {e}")
+        st.info("💾 Progress has been saved to .checkpoint.json. Click 'Index/Re-index Repositories' to resume from where you left off.")
         logger.error(f"Error during indexing: {e}", exc_info=True)
         return False
 
