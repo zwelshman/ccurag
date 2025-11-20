@@ -1,6 +1,6 @@
 # BHFDSC Repository Q&A System
 
-A Retrieval-Augmented Generation (RAG) application that enables users to ask questions about all repositories in the [BHF Data Science Centre (BHFDSC)](https://github.com/BHFDSC) GitHub organization. The system uses Anthropic's Claude AI, LangChain, and Streamlit to provide intelligent answers based on the organization's ~100 repositories focused on cardiovascular health research.
+A Retrieval-Augmented Generation (RAG) application that enables users to ask questions about all repositories in the [BHF Data Science Centre (BHFDSC)](https://github.com/BHFDSC) GitHub organization. The system uses Anthropic's Claude AI and Streamlit to provide intelligent answers based on the organization's ~100 repositories focused on cardiovascular health research.
 
 ## Features
 
@@ -19,9 +19,9 @@ User Question
     ↓
 Streamlit UI
     ↓
-LangChain RAG Pipeline
+Similarity Search (ChromaDB)
     ↓
-ChromaDB Vector Store ←→ Anthropic Claude API
+Retrieved Context + Question → Anthropic Claude API
     ↓
 Answer + Sources
 ```
@@ -151,7 +151,7 @@ ccurag/
 ├── config.py             # Configuration management
 ├── github_indexer.py     # GitHub repository fetching
 ├── vector_store.py       # Vector store management
-├── qa_chain.py           # QA system with LangChain
+├── qa_chain.py           # QA system with Anthropic SDK
 ├── index_repos.py        # Script to index repositories
 ├── requirements.txt      # Python dependencies
 ├── .env.example          # Example environment variables
@@ -201,12 +201,11 @@ The indexing process can take time. You can reduce `MAX_FILES_PER_REPO` in `conf
 
 ## Technologies Used
 
-- **Anthropic Claude**: Advanced AI language model
-- **LangChain**: Framework for building LLM applications
+- **Anthropic Claude**: Advanced AI language model (via Anthropic Python SDK)
 - **ChromaDB**: Vector database for embeddings
+- **Sentence Transformers**: Embedding models
 - **Streamlit**: Web application framework
 - **PyGithub**: GitHub API library
-- **Sentence Transformers**: Embedding models
 
 ## About BHFDSC
 

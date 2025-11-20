@@ -199,8 +199,8 @@ def render_qa_page():
             """
             This application uses:
             - **Anthropic Claude** for AI responses
-            - **LangChain** for RAG pipeline
             - **ChromaDB** for vector storage
+            - **Sentence Transformers** for embeddings
 
             **Indexed Organization:** BHFDSC
 
