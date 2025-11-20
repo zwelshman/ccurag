@@ -353,7 +353,7 @@ def setup_instructions():
 
     ## 3. Install Dependencies
     ```bash
-    pip install pinecone-client[grpc]
+    pip install pinecone[grpc]
     ```
 
     ## 4. Configure Environment Variables
@@ -369,7 +369,7 @@ def setup_instructions():
 
     ## 5. Update requirements.txt
     ```
-    pinecone-client[grpc]>=3.0.0
+    pinecone[grpc]>=3.0.0
     ```
 
     ## 6. Choose Region

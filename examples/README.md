@@ -104,7 +104,7 @@ pip install azure-storage-blob
 
 ### For Pinecone:
 ```bash
-pip install pinecone-client[grpc]
+pip install pinecone[grpc]
 ```
 
 ### For Supabase:
