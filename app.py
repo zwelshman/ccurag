@@ -51,8 +51,13 @@ def load_qa_system():
         return None
 
 
-def run_indexing():
-    """Run the repository indexing process."""
+def run_indexing(sample_size=None):
+    """Run the repository indexing process.
+
+    Args:
+        sample_size: If provided, randomly sample this many repositories.
+                    If None, index all repositories.
+    """
     try:
         # Create progress indicators
         progress_bar = st.progress(0, text="Starting indexing process...")
@@ -68,7 +73,7 @@ def run_indexing():
         status_text.info("🔍 **Phase 1/3:** Fetching repository list from BHFDSC...")
         indexer = GitHubIndexer(github_token=Config.GITHUB_TOKEN)
 
-        repos = indexer.get_all_repos()
+        repos = indexer.get_all_repos(sample_size=sample_size)
         total_repos = len(repos)
 
         with details_expander:
@@ -206,6 +211,8 @@ def render_admin_page():
             st.session_state.confirm_indexing = False
         if "indexing_started" not in st.session_state:
             st.session_state.indexing_started = False
+        if "sample_repos" not in st.session_state:
+            st.session_state.sample_repos = False
 
         # Show initial button or confirmation
         if not st.session_state.confirm_indexing and not st.session_state.indexing_started:
@@ -214,17 +221,37 @@ def render_admin_page():
                 st.rerun()
 
         if st.session_state.confirm_indexing and not st.session_state.indexing_started:
-            st.warning(
-                """
-                **This will:**
-                - Fetch all repositories from BHFDSC GitHub organization
-                - Download README files and code files
-                - Create embeddings and store them in ChromaDB
-                - Take approximately 10-30 minutes
-
-                **Proceed?**
-                """
+            # Add sampling option checkbox
+            st.session_state.sample_repos = st.checkbox(
+                "Sample 20 random repositories (faster for testing)",
+                value=st.session_state.sample_repos,
+                help="Enable this to index only 20 random repositories instead of all repositories. Useful for quick testing."
             )
+
+            if st.session_state.sample_repos:
+                st.warning(
+                    """
+                    **This will:**
+                    - Fetch 20 random repositories from BHFDSC GitHub organization
+                    - Download README files and code files
+                    - Create embeddings and store them in ChromaDB
+                    - Take approximately 2-5 minutes
+
+                    **Proceed?**
+                    """
+                )
+            else:
+                st.warning(
+                    """
+                    **This will:**
+                    - Fetch all repositories from BHFDSC GitHub organization
+                    - Download README files and code files
+                    - Create embeddings and store them in ChromaDB
+                    - Take approximately 10-30 minutes
+
+                    **Proceed?**
+                    """
+                )
 
             col_yes, col_no = st.columns(2)
             with col_yes:
@@ -239,7 +266,8 @@ def render_admin_page():
 
         # Run indexing if started
         if st.session_state.indexing_started:
-            success = run_indexing()
+            sample_size = 20 if st.session_state.sample_repos else None
+            success = run_indexing(sample_size=sample_size)
 
             # Reset states
             st.session_state.indexing_started = False

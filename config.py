@@ -58,6 +58,9 @@ class Config:
     # Max files per repo (to avoid rate limiting)
     MAX_FILES_PER_REPO = 50
 
+    # Repository sampling (set to None to index all repos)
+    SAMPLE_REPOS = None  # Set to a number (e.g., 20) to sample random repos
+
     @classmethod
     def validate(cls):
         """Validate required configuration."""
