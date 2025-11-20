@@ -4,6 +4,7 @@ A Retrieval-Augmented Generation (RAG) application that enables users to ask que
 
 ## Features
 
+- **Persistent Cloud Storage**: Uses Pinecone vector database - data persists across app restarts
 - **Comprehensive Repository Indexing**: Automatically fetches and indexes all repositories from the BHFDSC organization
 - **Intelligent Q&A**: Uses Claude AI with RAG to answer questions based on actual repository content
 - **Source Attribution**: Shows which repositories and files were used to generate each answer
@@ -11,6 +12,7 @@ A Retrieval-Augmented Generation (RAG) application that enables users to ask que
 - **Supports Multiple File Types**: Indexes Markdown, Python, R, Jupyter notebooks, and more
 - **Easy Deployment**: Works both locally and on Streamlit Cloud
 - **Built-in Setup Page**: Index repositories directly from the web interface
+- **Flexible Backend**: Switch between Pinecone (cloud) and ChromaDB (local) via configuration
 
 ## Architecture
 
@@ -19,17 +21,20 @@ User Question
     ↓
 Streamlit UI
     ↓
-Similarity Search (ChromaDB)
+Similarity Search (Pinecone Cloud)
     ↓
 Retrieved Context + Question → Anthropic Claude API
     ↓
 Answer + Sources
 ```
 
+**Vector Database**: Pinecone (default) provides persistent cloud storage. Can switch to ChromaDB for local development.
+
 ## Prerequisites
 
 - Python 3.9 or higher
-- Anthropic API key
+- Anthropic API key ([Get one here](https://console.anthropic.com/))
+- Pinecone API key ([Get one here](https://www.pinecone.io/))
 - (Optional) GitHub Personal Access Token for higher rate limits
 
 ## Installation
@@ -65,10 +70,20 @@ cp .env.example .env
 Edit `.env` and add your API keys:
 
 ```env
+# Required
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
-GITHUB_TOKEN=your_github_token_here  # Optional
+PINECONE_API_KEY=your_pinecone_api_key_here
+
+# Optional
+GITHUB_TOKEN=your_github_token_here
 GITHUB_ORG=BHFDSC
+
+# Vector Store (default: pinecone)
+VECTOR_STORE_BACKEND=pinecone
+PINECONE_INDEX_NAME=ccuindex
 ```
+
+📖 **See [PINECONE_SETUP.md](PINECONE_SETUP.md) for detailed Pinecone configuration guide**
 
 ## Quick Start
 
