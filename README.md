@@ -134,6 +134,23 @@ The application is designed to work seamlessly on Streamlit Cloud with built-in 
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment instructions and best practices.
 
+### Persistent Vector Database Options
+
+For production deployments or to avoid re-indexing on each restart, we provide several persistent vector database solutions:
+
+📋 **[View Detailed Proposal](PERSISTENT_VECTOR_DB_PROPOSAL.md)** - Comprehensive comparison of all options
+
+**Quick Summary:**
+- 🚀 **Quick Win**: Cloud Storage + ChromaDB sync (S3/GCS/Azure) - Minimal changes, low cost
+- 🏢 **Production**: Pinecone - Fully managed, excellent performance, free tier available
+- 💰 **Budget-Friendly**: Supabase + pgvector - Generous free tier (500MB), PostgreSQL-based
+
+See the `examples/` directory for ready-to-use implementation code:
+- `examples/cloud_storage_sync.py` - Sync ChromaDB with cloud storage
+- `examples/pinecone_backend.py` - Pinecone integration
+- `examples/supabase_backend.py` - Supabase + pgvector integration
+- `examples/README.md` - Detailed integration guide
+
 ## Configuration
 
 You can customize the application by modifying `config.py`:
@@ -147,17 +164,23 @@ You can customize the application by modifying `config.py`:
 
 ```
 ccurag/
-├── app.py                 # Streamlit application
-├── config.py             # Configuration management
-├── github_indexer.py     # GitHub repository fetching
-├── vector_store.py       # Vector store management
-├── qa_chain.py           # QA system with Anthropic SDK
-├── index_repos.py        # Script to index repositories
-├── requirements.txt      # Python dependencies
-├── .env.example          # Example environment variables
-├── .gitignore           # Git ignore file
-├── README.md            # This file
-└── chroma_db/           # Vector store (generated)
+├── app.py                          # Streamlit application
+├── config.py                       # Configuration management
+├── github_indexer.py               # GitHub repository fetching
+├── vector_store.py                 # Vector store management (ChromaDB)
+├── qa_chain.py                     # QA system with Anthropic SDK
+├── index_repos.py                  # Script to index repositories
+├── requirements.txt                # Python dependencies
+├── .env.example                    # Example environment variables
+├── .gitignore                      # Git ignore file
+├── README.md                       # This file
+├── PERSISTENT_VECTOR_DB_PROPOSAL.md # Vector database options proposal
+├── examples/                       # Alternative vector database implementations
+│   ├── README.md                   # Integration guide
+│   ├── cloud_storage_sync.py       # Cloud storage sync implementation
+│   ├── pinecone_backend.py         # Pinecone implementation
+│   └── supabase_backend.py         # Supabase + pgvector implementation
+└── chroma_db/                      # Vector store (generated)
 ```
 
 ## How It Works
