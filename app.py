@@ -201,7 +201,19 @@ def render_admin_page():
     with col2:
         st.subheader("🔧 Actions")
 
-        if st.button("🔄 Index/Re-index Repositories", type="primary", use_container_width=True):
+        # Initialize session state for indexing confirmation
+        if "confirm_indexing" not in st.session_state:
+            st.session_state.confirm_indexing = False
+        if "indexing_started" not in st.session_state:
+            st.session_state.indexing_started = False
+
+        # Show initial button or confirmation
+        if not st.session_state.confirm_indexing and not st.session_state.indexing_started:
+            if st.button("🔄 Index/Re-index Repositories", type="primary", use_container_width=True):
+                st.session_state.confirm_indexing = True
+                st.rerun()
+
+        if st.session_state.confirm_indexing and not st.session_state.indexing_started:
             st.warning(
                 """
                 **This will:**
@@ -213,15 +225,34 @@ def render_admin_page():
                 **Proceed?**
                 """
             )
-            if st.button("✅ Yes, Start Indexing", type="secondary"):
-                with st.spinner("Indexing repositories... This may take 10-30 minutes."):
-                    success = run_indexing()
-                    if success:
-                        st.balloons()
-                        st.success("Indexing complete! You can now use the Q&A system.")
-                        st.info("Go to the 'Q&A' tab in the sidebar to start asking questions.")
-                        # Clear the cache to reload the QA system
-                        st.cache_resource.clear()
+
+            col_yes, col_no = st.columns(2)
+            with col_yes:
+                if st.button("✅ Yes, Start Indexing", type="primary", use_container_width=True):
+                    st.session_state.indexing_started = True
+                    st.session_state.confirm_indexing = False
+                    st.rerun()
+            with col_no:
+                if st.button("❌ Cancel", type="secondary", use_container_width=True):
+                    st.session_state.confirm_indexing = False
+                    st.rerun()
+
+        # Run indexing if started
+        if st.session_state.indexing_started:
+            success = run_indexing()
+
+            # Reset states
+            st.session_state.indexing_started = False
+            st.session_state.confirm_indexing = False
+
+            if success:
+                st.success("Indexing complete! You can now use the Q&A system.")
+                st.info("Go to the 'Q&A' tab in the sidebar to start asking questions.")
+                # Clear the cache to reload the QA system
+                st.cache_resource.clear()
+                # Add a button to go to Q&A page
+                if st.button("Go to Q&A Page", type="primary"):
+                    st.rerun()
 
         if db_exists:
             st.divider()
