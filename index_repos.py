@@ -31,35 +31,53 @@ def main():
         sample_size = Config.SAMPLE_REPOS
         if sample_size:
             logger.info(f"Sampling {sample_size} random repositories (Config.SAMPLE_REPOS={sample_size})")
-        documents = indexer.index_all_repos(sample_size=sample_size, resume=True)
+        documents, changed_repos = indexer.index_all_repos(sample_size=sample_size, resume=True)
 
         if not documents:
-            logger.error("No documents found to index!")
-            sys.exit(1)
+            logger.info("No new or changed documents found. All repositories are up to date!")
+            sys.exit(0)
 
         logger.info(f"Successfully fetched {len(documents)} documents")
+        logger.info(f"Repositories with changes: {len(changed_repos)}")
 
-        # Create vector store
-        logger.info("Creating vector store...")
+        # Create or update vector store
         vector_store_manager = VectorStoreManager()
 
-        # Check if vector store already exists
-        db_path = Path(Config.CHROMA_DB_DIR)
-        if db_path.exists():
-            response = input(f"Vector store already exists at {Config.CHROMA_DB_DIR}. Overwrite? (yes/no): ")
-            if response.lower() != 'yes':
-                logger.info("Indexing cancelled.")
-                sys.exit(0)
+        # Check if this is an incremental update or initial indexing
+        # For Pinecone, check if index exists
+        if Config.VECTOR_STORE_BACKEND == "pinecone":
+            from vector_store_pinecone import PineconeVectorStore
+            pinecone_store = PineconeVectorStore()
+            existing_indexes = [index.name for index in pinecone_store.pc.list_indexes()]
 
-            # Remove existing database
-            import shutil
-            shutil.rmtree(Config.CHROMA_DB_DIR)
-            logger.info("Removed existing vector store")
+            if Config.PINECONE_INDEX_NAME in existing_indexes:
+                # Incremental update: upsert documents
+                logger.info("Performing incremental update to existing vector store...")
+                pinecone_store.upsert_documents(documents, repos_to_update=changed_repos)
+                logger.info("Incremental update completed successfully!")
+            else:
+                # Initial indexing: create new vector store
+                logger.info("Creating new vector store...")
+                vector_store_manager.create_vectorstore(documents)
+                logger.info("Vector store created successfully!")
+        else:
+            # For ChromaDB, check if database directory exists
+            db_path = Path(Config.CHROMA_DB_DIR)
+            if db_path.exists():
+                response = input(f"Vector store already exists at {Config.CHROMA_DB_DIR}. Overwrite? (yes/no): ")
+                if response.lower() != 'yes':
+                    logger.info("Indexing cancelled.")
+                    sys.exit(0)
 
-        vector_store_manager.create_vectorstore(documents)
+                # Remove existing database
+                import shutil
+                shutil.rmtree(Config.CHROMA_DB_DIR)
+                logger.info("Removed existing vector store")
+
+            vector_store_manager.create_vectorstore(documents)
+            logger.info("Vector store created successfully!")
 
         logger.info("Indexing completed successfully!")
-        logger.info(f"Vector store saved to: {Config.CHROMA_DB_DIR}")
         logger.info("You can now run the Streamlit app: streamlit run app.py")
 
     except KeyboardInterrupt:
