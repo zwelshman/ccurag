@@ -6,7 +6,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from github import Github, GithubException
 from config import Config
 
@@ -90,6 +90,7 @@ class CheckpointManager:
             'started_at': datetime.now().isoformat(),
             'last_updated': datetime.now().isoformat(),
             'processed_repos': [],
+            'repos_metadata': {},  # New: Track commit SHA and metadata per repo
             'total_repos': total_repos,
             'completed_repos': 0,
             'documents_collected': 0
@@ -98,17 +99,31 @@ class CheckpointManager:
         logger.info(f"Created new checkpoint for {total_repos} repositories")
         return self.checkpoint_data
 
-    def update(self, repo_full_name: str, doc_count: int):
+    def update(self, repo_full_name: str, doc_count: int, commit_sha: Optional[str] = None):
         """Update checkpoint with completed repository.
 
         Args:
             repo_full_name: Full name of completed repository
             doc_count: Number of documents collected from this repo
+            commit_sha: Latest commit SHA of the repository
         """
         if not self.checkpoint_data:
             return
 
-        self.checkpoint_data['processed_repos'].append(repo_full_name)
+        # Add to processed repos list if not already there
+        if repo_full_name not in self.checkpoint_data['processed_repos']:
+            self.checkpoint_data['processed_repos'].append(repo_full_name)
+
+        # Store detailed metadata for the repo
+        if 'repos_metadata' not in self.checkpoint_data:
+            self.checkpoint_data['repos_metadata'] = {}
+
+        self.checkpoint_data['repos_metadata'][repo_full_name] = {
+            'commit_sha': commit_sha,
+            'last_indexed': datetime.now().isoformat(),
+            'doc_count': doc_count
+        }
+
         self.checkpoint_data['completed_repos'] = len(self.checkpoint_data['processed_repos'])
         self.checkpoint_data['documents_collected'] = self.checkpoint_data.get('documents_collected', 0) + doc_count
         self.checkpoint_data['last_updated'] = datetime.now().isoformat()
@@ -130,6 +145,36 @@ class CheckpointManager:
         if not self.checkpoint_data:
             return []
         return self.checkpoint_data.get('processed_repos', [])
+
+    def get_repo_commit_sha(self, repo_full_name: str) -> Optional[str]:
+        """Get the stored commit SHA for a repository.
+
+        Args:
+            repo_full_name: Full name of repository
+
+        Returns:
+            Commit SHA if found, None otherwise
+        """
+        if not self.checkpoint_data:
+            return None
+        repos_metadata = self.checkpoint_data.get('repos_metadata', {})
+        repo_info = repos_metadata.get(repo_full_name, {})
+        return repo_info.get('commit_sha')
+
+    def has_repo_changed(self, repo_full_name: str, current_commit_sha: str) -> bool:
+        """Check if a repository has changed since last indexing.
+
+        Args:
+            repo_full_name: Full name of repository
+            current_commit_sha: Current commit SHA of the repository
+
+        Returns:
+            True if repo has changed or is new, False if unchanged
+        """
+        stored_sha = self.get_repo_commit_sha(repo_full_name)
+        if stored_sha is None:
+            return True  # New repo
+        return stored_sha != current_commit_sha
 
     def delete(self):
         """Delete checkpoint file."""
@@ -169,6 +214,15 @@ class GitHubIndexer:
 
             repo_list = []
             for repo in repos:
+                # Get the latest commit SHA from the default branch
+                commit_sha = None
+                try:
+                    if repo.default_branch:
+                        branch = repo.get_branch(repo.default_branch)
+                        commit_sha = branch.commit.sha
+                except GithubException:
+                    logger.warning(f"Could not fetch commit SHA for {repo.full_name}")
+
                 repo_info = {
                     "name": repo.name,
                     "full_name": repo.full_name,
@@ -177,9 +231,10 @@ class GitHubIndexer:
                     "language": repo.language,
                     "stars": repo.stargazers_count,
                     "topics": repo.get_topics(),
+                    "commit_sha": commit_sha,  # New: Store latest commit SHA
                 }
                 repo_list.append(repo_info)
-                logger.info(f"Found repo: {repo.name}")
+                logger.info(f"Found repo: {repo.name} (SHA: {commit_sha[:7] if commit_sha else 'N/A'})")
 
             logger.info(f"Total repositories found: {len(repo_list)}")
 
@@ -296,7 +351,7 @@ class GitHubIndexer:
 
         return documents
 
-    def index_all_repos(self, sample_size: Optional[int] = None, resume: bool = True) -> List[Dict]:
+    def index_all_repos(self, sample_size: Optional[int] = None, resume: bool = True) -> Tuple[List[Dict], List[str]]:
         """Index all repositories in the organization with checkpoint/resume support.
 
         Args:
@@ -305,7 +360,9 @@ class GitHubIndexer:
             resume: If True, attempt to resume from checkpoint if it exists.
 
         Returns:
-            List of all documents collected from repositories
+            Tuple of (documents, changed_repos) where:
+                - documents: List of all documents collected from repositories
+                - changed_repos: List of repo names that had changes (not new repos)
         """
         all_documents = []
         repos = self.get_all_repos(sample_size=sample_size)
@@ -330,12 +387,29 @@ class GitHubIndexer:
         if not checkpoint:
             self.checkpoint_manager.create(self.org_name, sample_size, total_repos)
 
-        # Filter out already processed repos
-        repos_to_process = [r for r in repos if r['full_name'] not in processed_repos]
+        # Filter out unchanged repos (check commit SHA)
+        repos_to_process = []
+        changed_repos = []  # Track repos that have changes (not new)
+        repos_skipped = 0
+        for repo in repos:
+            repo_full_name = repo['full_name']
+            commit_sha = repo.get('commit_sha')
 
-        if len(repos_to_process) < total_repos:
-            logger.info(f"Skipping {total_repos - len(repos_to_process)} already processed repos")
-            logger.info(f"Processing {len(repos_to_process)} remaining repos")
+            # Check if repo needs processing
+            if commit_sha and not self.checkpoint_manager.has_repo_changed(repo_full_name, commit_sha):
+                logger.info(f"Skipping {repo_full_name} - no changes detected")
+                repos_skipped += 1
+            else:
+                repos_to_process.append(repo)
+                if commit_sha:
+                    is_new = repo_full_name not in processed_repos
+                    if not is_new:
+                        changed_repos.append(repo_full_name)  # Existing repo with changes
+                    logger.info(f"Will process {repo_full_name} - {'new repo' if is_new else 'changes detected'}")
+
+        if repos_skipped > 0:
+            logger.info(f"Skipped {repos_skipped} unchanged repos")
+            logger.info(f"Processing {len(repos_to_process)} new or changed repos (including {len(changed_repos)} with updates)")
 
         # Process each repository sequentially
         for i, repo in enumerate(repos_to_process, 1):
@@ -361,7 +435,8 @@ class GitHubIndexer:
 
                 # Update checkpoint after successful processing
                 doc_count = len(repo_contents) + 1  # +1 for repo_doc
-                self.checkpoint_manager.update(repo['full_name'], doc_count)
+                commit_sha = repo.get('commit_sha')
+                self.checkpoint_manager.update(repo['full_name'], doc_count, commit_sha)
                 logger.info(f"Checkpoint updated: {overall_index}/{total_repos} repos completed")
 
             except Exception as e:
@@ -370,9 +445,9 @@ class GitHubIndexer:
                 # Don't update checkpoint for this repo - it will be retried on resume
                 raise
 
-        # All repos processed successfully - delete checkpoint
+        # All repos processed successfully - keep checkpoint for incremental updates
         logger.info(f"Total documents indexed: {len(all_documents)}")
-        self.checkpoint_manager.delete()
-        logger.info("All repositories processed successfully! Checkpoint cleared.")
+        logger.info(f"Repositories with changes: {len(changed_repos)}")
+        logger.info("All repositories processed successfully! Checkpoint saved for incremental updates.")
 
-        return all_documents
+        return all_documents, changed_repos
