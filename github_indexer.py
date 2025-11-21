@@ -366,20 +366,29 @@ class GitHubIndexer:
 
         return documents
 
-    def index_all_repos(self, sample_size: Optional[int] = None, resume: bool = True) -> Tuple[List[Dict], List[str]]:
-        """Index all repositories in the organization with checkpoint/resume support.
+    def index_all_repos(self, sample_size: Optional[int] = None, resume: bool = True, vector_store_manager=None) -> Tuple[int, List[str]]:
+        """Index all repositories with streaming insertion into Pinecone.
+
+        This method processes repos one at a time:
+        1. Find repo
+        2. Index repo (collect documents)
+        3. Insert into Pinecone
+        4. Checkpoint
+        5. Repeat for next repo
 
         Args:
             sample_size: If provided, randomly sample this many repositories.
                         If None, index all repositories.
             resume: If True, attempt to resume from checkpoint if it exists.
+            vector_store_manager: Vector store instance to use for upserting.
+                                If None, no upserting will occur (docs only).
 
         Returns:
-            Tuple of (documents, changed_repos) where:
-                - documents: List of all documents collected from repositories
+            Tuple of (total_documents, changed_repos) where:
+                - total_documents: Total count of documents processed
                 - changed_repos: List of repo names that had changes (not new repos)
         """
-        all_documents = []
+        total_documents_processed = 0
         repos = self.get_all_repos(sample_size=sample_size)
         total_repos = len(repos)
 
@@ -391,8 +400,6 @@ class GitHubIndexer:
             if checkpoint and self.checkpoint_manager.validate(self.org_name, sample_size, total_repos):
                 processed_repos = set(self.checkpoint_manager.get_processed_repos())
                 logger.info(f"Resuming from checkpoint: {len(processed_repos)} repos already processed")
-                # Note: We can't restore documents from checkpoint, so we'll start with empty list
-                # but skip already processed repos
             else:
                 if checkpoint:
                     logger.info("Checkpoint invalid or outdated, starting fresh")
@@ -426,12 +433,20 @@ class GitHubIndexer:
             logger.info(f"Skipped {repos_skipped} unchanged repos")
             logger.info(f"Processing {len(repos_to_process)} new or changed repos (including {len(changed_repos)} with updates)")
 
-        # Process each repository sequentially
+        # Process each repository sequentially with streaming insertion
         for i, repo in enumerate(repos_to_process, 1):
             overall_index = total_repos - len(repos_to_process) + i
-            logger.info(f"Indexing repo {overall_index}/{total_repos}: {repo['full_name']}")
+            repo_full_name = repo['full_name']
+
+            logger.info(f"")
+            logger.info(f"{'='*80}")
+            logger.info(f"Processing repo {overall_index}/{total_repos}: {repo_full_name}")
+            logger.info(f"{'='*80}")
 
             try:
+                # Step 1: Index repo - collect documents
+                logger.info(f"[1/3] Indexing {repo_full_name}...")
+
                 # Add repo metadata as a document
                 repo_doc = {
                     "content": f"Repository: {repo['name']}\n\nDescription: {repo['description']}\n\nLanguage: {repo['language']}\n\nTopics: {', '.join(repo['topics'])}",
@@ -442,27 +457,44 @@ class GitHubIndexer:
                         "url": repo['url'],
                     }
                 }
-                all_documents.append(repo_doc)
 
                 # Get file contents
-                repo_contents = self.get_repo_contents(repo['full_name'])
-                all_documents.extend(repo_contents)
+                repo_contents = self.get_repo_contents(repo_full_name)
 
-                # Update checkpoint after successful processing
-                doc_count = len(repo_contents) + 1  # +1 for repo_doc
+                # Combine all documents for this repo
+                repo_documents = [repo_doc] + repo_contents
+                doc_count = len(repo_documents)
+                logger.info(f"✓ Indexed {doc_count} documents from {repo_full_name}")
+
+                # Step 2: Insert into Pinecone
+                if vector_store_manager:
+                    logger.info(f"[2/3] Inserting {doc_count} documents into Pinecone...")
+                    vector_store_manager.upsert_documents(repo_documents, repo_name=repo_full_name)
+                    logger.info(f"✓ Inserted {doc_count} documents into Pinecone")
+                else:
+                    logger.info(f"[2/3] Skipping Pinecone insertion (no vector store provided)")
+
+                # Step 3: Checkpoint
+                logger.info(f"[3/3] Updating checkpoint...")
                 commit_sha = repo.get('commit_sha')
-                self.checkpoint_manager.update(repo['full_name'], doc_count, commit_sha)
-                logger.info(f"Checkpoint updated: {overall_index}/{total_repos} repos completed")
+                self.checkpoint_manager.update(repo_full_name, doc_count, commit_sha)
+                total_documents_processed += doc_count
+                logger.info(f"✓ Checkpoint updated: {overall_index}/{total_repos} repos completed")
+                logger.info(f"✓ Total documents processed so far: {total_documents_processed}")
 
             except Exception as e:
-                logger.error(f"Failed to process repo {repo['full_name']}: {e}")
+                logger.error(f"❌ Failed to process repo {repo_full_name}: {e}")
                 logger.info("Progress has been saved. You can resume by running the script again.")
                 # Don't update checkpoint for this repo - it will be retried on resume
                 raise
 
-        # All repos processed successfully - keep checkpoint for incremental updates
-        logger.info(f"Total documents indexed: {len(all_documents)}")
+        # All repos processed successfully
+        logger.info(f"")
+        logger.info(f"{'='*80}")
+        logger.info(f"INDEXING COMPLETE")
+        logger.info(f"{'='*80}")
+        logger.info(f"Total documents processed: {total_documents_processed}")
         logger.info(f"Repositories with changes: {len(changed_repos)}")
         logger.info("All repositories processed successfully! Checkpoint saved for incremental updates.")
 
-        return all_documents, changed_repos
+        return total_documents_processed, changed_repos

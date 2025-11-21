@@ -160,6 +160,105 @@ class ChromaVectorStore:
         update_progress("Vector store created successfully!", 1.0)
         return self.collection
 
+    def ensure_collection_exists(self):
+        """Ensure the ChromaDB collection exists, create if necessary."""
+        if self.collection is not None:
+            return  # Already connected
+
+        logger.info(f"Ensuring ChromaDB collection exists: {Config.COLLECTION_NAME}")
+
+        # Initialize ChromaDB client
+        self.client = chromadb.PersistentClient(
+            path=Config.CHROMA_DB_DIR,
+            settings=Settings(anonymized_telemetry=False)
+        )
+
+        # Try to get existing collection, create if doesn't exist
+        try:
+            self.collection = self.client.get_collection(name=Config.COLLECTION_NAME)
+            logger.info(f"✓ Using existing ChromaDB collection: {Config.COLLECTION_NAME}")
+        except Exception:
+            logger.info(f"Creating new ChromaDB collection: {Config.COLLECTION_NAME}")
+            self.collection = self.client.create_collection(
+                name=Config.COLLECTION_NAME,
+                metadata={"hnsw:space": "cosine"}
+            )
+            logger.info(f"✓ Collection '{Config.COLLECTION_NAME}' created successfully")
+
+    def upsert_documents(self, documents: List[Dict], repo_name: str = None):
+        """
+        Incrementally upsert documents to ChromaDB (streaming mode).
+
+        This method is used for processing repositories one at a time,
+        inserting into ChromaDB as we go rather than batching everything.
+
+        Args:
+            documents: List of documents to upsert (typically from one repo)
+            repo_name: Optional repo name for logging purposes
+        """
+        if not documents:
+            logger.warning("No documents to upsert")
+            return
+
+        # Ensure collection exists
+        self.ensure_collection_exists()
+
+        repo_label = f" from {repo_name}" if repo_name else ""
+        logger.info(f"Upserting {len(documents)} documents{repo_label} to ChromaDB...")
+
+        # Process and split documents
+        all_texts = []
+        all_metadatas = []
+        all_ids = []
+
+        # Get current count to avoid ID collisions
+        collection_count = self.collection.count()
+        chunk_id_offset = collection_count
+
+        logger.info(f"Splitting {len(documents)} documents into chunks...")
+        for doc_idx, doc in enumerate(documents):
+            content = doc["content"]
+            metadata = doc["metadata"]
+
+            # Split text into chunks
+            chunks = self._split_text(content)
+
+            for chunk in chunks:
+                if chunk.strip():
+                    all_texts.append(chunk)
+                    all_metadatas.append(metadata)
+                    all_ids.append(f"doc_{chunk_id_offset}")
+                    chunk_id_offset += 1
+
+        logger.info(f"✓ Created {len(all_texts)} chunks from {len(documents)} documents")
+
+        # Create embeddings and upsert in batches
+        batch_size = 100
+        total_batches = (len(all_texts) + batch_size - 1) // batch_size
+        logger.info(f"Upserting in {total_batches} batch(es) of ~{batch_size} chunks each")
+
+        for i in range(0, len(all_texts), batch_size):
+            batch_num = i // batch_size + 1
+            batch_texts = all_texts[i:i + batch_size]
+            batch_metadata = all_metadatas[i:i + batch_size]
+            batch_ids = all_ids[i:i + batch_size]
+
+            # Create embeddings
+            logger.info(f"  [Batch {batch_num}/{total_batches}] Creating embeddings for {len(batch_texts)} chunks...")
+            embeddings = self.embedding_model.encode(batch_texts).tolist()
+
+            # Add to ChromaDB
+            logger.info(f"  [Batch {batch_num}/{total_batches}] Adding to ChromaDB...")
+            self.collection.add(
+                documents=batch_texts,
+                embeddings=embeddings,
+                metadatas=batch_metadata,
+                ids=batch_ids
+            )
+            logger.info(f"  [Batch {batch_num}/{total_batches}] ✓ Added to database")
+
+        logger.info(f"✓ Successfully upserted {len(all_texts)} chunks{repo_label}")
+
     def load_vectorstore(self):
         """Load an existing vector store."""
         logger.info("Loading existing vector store...")

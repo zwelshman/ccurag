@@ -190,6 +190,120 @@ class PineconeVectorStore:
         logger.info(f"Successfully indexed {len(all_texts)} chunks to Pinecone")
         return self.index
 
+    def ensure_index_exists(self):
+        """Ensure the Pinecone index exists, create if necessary."""
+        if self.index is not None:
+            return  # Already connected
+
+        logger.info(f"Ensuring Pinecone index exists: {self.index_name}")
+
+        try:
+            existing_indexes = [index.name for index in self.pc.list_indexes()]
+            if self.index_name not in existing_indexes:
+                logger.info(f"Creating new Pinecone index: {self.index_name}")
+                self.pc.create_index(
+                    name=self.index_name,
+                    dimension=self.dimension,
+                    metric="cosine",
+                    spec=ServerlessSpec(
+                        cloud=self.cloud,
+                        region=self.region
+                    )
+                )
+
+                # Wait for index to be ready
+                while not self.pc.describe_index(self.index_name).status['ready']:
+                    logger.info("Waiting for index to be ready...")
+                    time.sleep(1)
+
+                logger.info(f"✓ Index '{self.index_name}' created successfully")
+            else:
+                logger.info(f"✓ Using existing Pinecone index: {self.index_name}")
+
+            # Connect to index
+            self.index = self.pc.Index(self.index_name)
+
+        except Exception as e:
+            logger.error(f"Error ensuring index exists: {e}")
+            raise
+
+    def upsert_documents(self, documents: List[Dict], repo_name: str = None):
+        """
+        Incrementally upsert documents to Pinecone (streaming mode).
+
+        This method is used for processing repositories one at a time,
+        inserting into Pinecone as we go rather than batching everything.
+
+        Args:
+            documents: List of documents to upsert (typically from one repo)
+            repo_name: Optional repo name for logging purposes
+        """
+        if not documents:
+            logger.warning("No documents to upsert")
+            return
+
+        # Ensure index exists
+        self.ensure_index_exists()
+
+        repo_label = f" from {repo_name}" if repo_name else ""
+        logger.info(f"Upserting {len(documents)} documents{repo_label} to Pinecone...")
+
+        # Process and split documents
+        all_texts = []
+        all_metadatas = []
+        all_ids = []
+
+        # Get current max chunk ID from index stats to avoid collisions
+        stats = self.index.describe_index_stats()
+        current_vector_count = stats.get('total_vector_count', 0)
+        chunk_id_offset = current_vector_count
+
+        logger.info(f"Splitting {len(documents)} documents into chunks...")
+        for doc_idx, doc in enumerate(documents):
+            content = doc["content"]
+            metadata = doc["metadata"]
+
+            # Split text into chunks
+            chunks = self._split_text(content)
+
+            for chunk in chunks:
+                if chunk.strip():
+                    all_texts.append(chunk)
+                    all_metadatas.append(metadata)
+                    all_ids.append(f"doc_{chunk_id_offset}")
+                    chunk_id_offset += 1
+
+        logger.info(f"✓ Created {len(all_texts)} chunks from {len(documents)} documents")
+
+        # Create embeddings and upsert in batches
+        batch_size = 100
+        total_batches = (len(all_texts) + batch_size - 1) // batch_size
+        logger.info(f"Upserting in {total_batches} batch(es) of ~{batch_size} chunks each")
+
+        for i in range(0, len(all_texts), batch_size):
+            batch_num = i // batch_size + 1
+            batch_texts = all_texts[i:i + batch_size]
+            batch_metadata = all_metadatas[i:i + batch_size]
+            batch_ids = all_ids[i:i + batch_size]
+
+            # Create embeddings
+            logger.info(f"  [Batch {batch_num}/{total_batches}] Creating embeddings for {len(batch_texts)} chunks...")
+            embeddings = self.embedding_model.encode(batch_texts).tolist()
+
+            # Prepare vectors for Pinecone
+            vectors = []
+            for idx, (doc_id, embedding, metadata) in enumerate(zip(batch_ids, embeddings, batch_metadata)):
+                metadata_with_text = metadata.copy()
+                metadata_with_text['text'] = batch_texts[idx]
+                vectors.append((doc_id, embedding, metadata_with_text))
+
+            # Upsert to Pinecone
+            logger.info(f"  [Batch {batch_num}/{total_batches}] Uploading to Pinecone...")
+            self.index.upsert(vectors=vectors)
+            logger.info(f"  [Batch {batch_num}/{total_batches}] ✓ Upload complete")
+
+        logger.info(f"✓ Successfully upserted {len(all_texts)} chunks{repo_label}")
+
     def load_vectorstore(self):
         """Load an existing vector store."""
         logger.info(f"Loading existing Pinecone index: {self.index_name}")

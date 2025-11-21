@@ -95,7 +95,7 @@ def run_indexing(sample_size=None):
                 repo_status.info("📋 Found checkpoint file - resuming from where we left off")
 
         # Phase 1: Fetch repositories
-        status_text.info("🔍 **Phase 1/3:** Fetching repository list from BHFDSC...")
+        status_text.info("🔍 **Phase 1/2:** Fetching repository list from BHFDSC...")
         repos = indexer.get_all_repos(sample_size=sample_size)
         total_repos = len(repos)
 
@@ -104,55 +104,36 @@ def run_indexing(sample_size=None):
 
         progress_bar.progress(10, text=f"Found {total_repos} repositories")
 
-        # Phase 2: Index repository contents (with automatic checkpoint/resume)
-        status_text.info(f"📥 **Phase 2/3:** Indexing contents from {total_repos} repositories...")
+        # Phase 2 & 3: Index repositories with streaming insertion to Pinecone
+        status_text.info(f"📥 **Phase 2/2:** Indexing and uploading repositories (streaming mode)...")
         status_text.caption("💾 Progress is automatically saved - you can safely interrupt and resume later")
 
-        # Use the checkpoint-enabled indexing method
-        all_documents, changed_repos = indexer.index_all_repos(sample_size=sample_size, resume=True)
-
-        # Update progress bar to completion of phase 2
-        progress_bar.progress(50, text="Repository indexing complete")
-
-        if not all_documents:
-            st.error("No documents found to index!")
-            return False
-
-        with details_expander:
-            doc_status.success(f"✅ Collected {len(all_documents)} documents from {total_repos} repositories")
-
-        # Phase 3: Create vector store
-        status_text.info(f"🧮 **Phase 3/3:** Creating vector store from {len(all_documents)} documents...")
-        progress_bar.progress(50, text="Creating vector embeddings...")
-
-        # Remove existing database if it exists
-        db_path = Path(Config.CHROMA_DB_DIR)
-        if db_path.exists():
-            shutil.rmtree(Config.CHROMA_DB_DIR)
-
-        # Create vector store with progress updates
+        # Initialize vector store for streaming upserts
         vector_store_manager = VectorStoreManager()
 
-        # We'll need to enhance vector_store to show progress, for now show intermediate steps
         with details_expander:
-            embedding_status.info("🔄 Splitting documents into chunks...")
+            doc_status.info("🔄 Processing repositories one at a time (find → index → insert → checkpoint)")
 
-        progress_bar.progress(60, text="Splitting documents into chunks...")
+        # Use streaming indexing: process each repo and immediately insert to Pinecone
+        total_documents, changed_repos = indexer.index_all_repos(
+            sample_size=sample_size,
+            resume=True,
+            vector_store_manager=vector_store_manager
+        )
 
-        # This will internally handle the chunking and embedding
-        vector_store_manager.create_vectorstore(all_documents, progress_callback=lambda msg, pct: (
-            progress_bar.progress(60 + int(pct * 0.35), text=msg),
-            embedding_status.info(f"🔄 {msg}")
-        ))
+        if total_documents == 0:
+            st.error("No documents found to index!")
+            return False
 
         progress_bar.progress(100, text="✅ Indexing complete!")
         status_text.success("✅ **Indexing completed successfully!**")
 
         with details_expander:
-            embedding_status.success(f"✅ Vector store created successfully!")
+            doc_status.success(f"✅ Processed {total_documents} documents from {total_repos} repositories")
+            embedding_status.success(f"✅ All documents streamed to Pinecone successfully!")
 
         st.balloons()
-        st.success(f"🎉 Successfully indexed {len(all_documents)} documents from {total_repos} BHFDSC repositories!")
+        st.success(f"🎉 Successfully indexed {total_documents} documents from {total_repos} BHFDSC repositories!")
         return True
 
     except KeyboardInterrupt:
