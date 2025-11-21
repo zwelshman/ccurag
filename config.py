@@ -76,9 +76,7 @@ class Config:
     # Set USE_TEST_REPOS=true in .env to enable test mode
     USE_TEST_REPOS = get_secret("USE_TEST_REPOS", "false").lower() in ["true", "1", "yes"]
     TEST_REPOS = [
-        # Small repositories for quick testing (update these to match your org)
-        # Format: list of repository names (not full names, just the repo name)
-        # Example: ["repo1", "repo2", "repo3"]
+        "hds_curated_assets","documentation"
     ]
 
     @classmethod
