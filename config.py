@@ -61,7 +61,7 @@ class Config:
 
     # File types to index
     INDEXED_FILE_EXTENSIONS = [
-        ".md", ".py", ".r", ".R", ".ipynb",
+        ".md", ".py", ".r", ".R", ".ipynb", ".csv"
         ".txt", ".rst", ".html", ".yaml", ".yml", ".json", ".sql"
     ]
 
