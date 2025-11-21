@@ -35,7 +35,34 @@ def main():
 
         if not documents:
             logger.info("No new or changed documents found. All repositories are up to date!")
-            sys.exit(0)
+
+            # Verify vector store actually has data
+            if Config.VECTOR_STORE_BACKEND == "pinecone":
+                from vector_store_pinecone import PineconeVectorStore
+                pinecone_store = PineconeVectorStore()
+                try:
+                    pinecone_store.load_vectorstore()
+                    stats = pinecone_store.get_stats()
+                    vector_count = stats.get('total_vector_count', 0)
+                    if vector_count > 0:
+                        logger.info(f"Vector store verified: {vector_count} vectors present")
+                        sys.exit(0)
+                    else:
+                        logger.warning("⚠️  Vector store has 0 vectors despite completed checkpoint!")
+                        logger.warning("Checkpoint may be corrupted. Deleting and re-indexing...")
+                        checkpoint_file = Path(".checkpoint.json")
+                        if checkpoint_file.exists():
+                            checkpoint_file.unlink()
+                        # Re-run indexing
+                        documents, changed_repos = indexer.index_all_repos(sample_size=sample_size, resume=False)
+                        if not documents:
+                            logger.error("Still no documents after checkpoint reset!")
+                            sys.exit(1)
+                except Exception as e:
+                    logger.error(f"Error verifying vector store: {e}")
+                    sys.exit(1)
+            else:
+                sys.exit(0)
 
         logger.info(f"Successfully fetched {len(documents)} documents")
         logger.info(f"Repositories with changes: {len(changed_repos)}")
