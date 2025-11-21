@@ -402,6 +402,29 @@ def render_qa_page():
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
+    # Example questions (shown first)
+    st.subheader("💡 Example Questions")
+
+    example_questions = [
+        "What COVID-19 and cardiovascular research projects are in this organization?",
+        "Which repositories contain Python code for data analysis?",
+        "What phenotyping algorithms are used in the CCU projects?",
+        "Show me repositories that work with linked electronic health records",
+        "What machine learning methods are used in these projects?",
+    ]
+
+    cols = st.columns(2)
+    for i, example in enumerate(example_questions):
+        with cols[i % 2]:
+            if st.button(example, key=f"example_{i}"):
+                # Trigger the question
+                st.session_state.messages.append({"role": "user", "content": example})
+                st.rerun()
+
+    # Q&A Chat (shown below example questions)
+    st.divider()
+    st.subheader("💬 Ask Your Question")
+
     # Display chat history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -459,26 +482,6 @@ def render_qa_page():
                     error_msg = f"Error generating answer: {e}"
                     st.error(error_msg)
                     logger.error(error_msg, exc_info=True)
-
-    # Example questions
-    st.divider()
-    st.subheader("💡 Example Questions")
-
-    example_questions = [
-        "What COVID-19 and cardiovascular research projects are in this organization?",
-        "Which repositories contain Python code for data analysis?",
-        "What phenotyping algorithms are used in the CCU projects?",
-        "Show me repositories that work with linked electronic health records",
-        "What machine learning methods are used in these projects?",
-    ]
-
-    cols = st.columns(2)
-    for i, example in enumerate(example_questions):
-        with cols[i % 2]:
-            if st.button(example, key=f"example_{i}"):
-                # Trigger the question
-                st.session_state.messages.append({"role": "user", "content": example})
-                st.rerun()
 
 
 def main():
