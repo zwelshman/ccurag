@@ -1,18 +1,16 @@
 # BHFDSC Repository Q&A System
 
-A Retrieval-Augmented Generation (RAG) application that enables users to ask questions about all repositories in the [BHF Data Science Centre (BHFDSC)](https://github.com/BHFDSC) GitHub organization. The system uses Anthropic's Claude AI and Streamlit to provide intelligent answers based on the organization's ~100 repositories focused on cardiovascular health research.
+A simple Retrieval-Augmented Generation (RAG) application that enables users to ask questions about repositories in the [BHF Data Science Centre (BHFDSC)](https://github.com/BHFDSC) GitHub organization. Uses Anthropic's Claude AI, Pinecone vector database, and Streamlit.
 
 ## Features
 
-- **Persistent Cloud Storage**: Uses Pinecone vector database - data persists across app restarts
-- **Comprehensive Repository Indexing**: Automatically fetches and indexes all repositories from the BHFDSC organization
-- **Intelligent Q&A**: Uses Claude AI with RAG to answer questions based on actual repository content
-- **Source Attribution**: Shows which repositories and files were used to generate each answer
-- **Interactive UI**: Simple Streamlit interface for asking questions
-- **Supports Multiple File Types**: Indexes Markdown, Python, R, Jupyter notebooks, and more
-- **Easy Deployment**: Works both locally and on Streamlit Cloud
-- **Built-in Setup Page**: Index repositories directly from the web interface
-- **Flexible Backend**: Switch between Pinecone (cloud) and ChromaDB (local) via configuration
+- **Simple Architecture**: Straightforward RAG implementation with minimal complexity
+- **Persistent Cloud Storage**: Uses Pinecone vector database - data persists across sessions
+- **Comprehensive Indexing**: Indexes README files and code from all organization repositories
+- **Intelligent Q&A**: Uses Claude AI with RAG to answer questions based on repository content
+- **Source Attribution**: Shows which repositories and files were used to generate answers
+- **Interactive UI**: Clean Streamlit interface
+- **Multiple File Types**: Indexes Markdown, Python, R, Jupyter notebooks, and more
 
 ## Architecture
 
@@ -28,13 +26,17 @@ Retrieved Context + Question → Anthropic Claude API
 Answer + Sources
 ```
 
-**Vector Database**: Pinecone (default) provides persistent cloud storage. Can switch to ChromaDB for local development.
+**Key Components**:
+- **GitHub Indexer**: Fetches repositories and file contents
+- **Pinecone**: Cloud vector database for embeddings storage
+- **Claude**: Anthropic's AI for question answering
+- **Streamlit**: Web interface
 
 ## Prerequisites
 
 - Python 3.9 or higher
-- Anthropic API key ([Get one here](https://console.anthropic.com/))
-- Pinecone API key ([Get one here](https://www.pinecone.io/))
+- [Anthropic API key](https://console.anthropic.com/)
+- [Pinecone API key](https://www.pinecone.io/)
 - (Optional) GitHub Personal Access Token for higher rate limits
 
 ## Installation
@@ -61,7 +63,7 @@ pip install -r requirements.txt
 
 4. **Set up environment variables**
 
-Create a `.env` file in the project root:
+Create a `.env` file:
 
 ```bash
 cp .env.example .env
@@ -71,67 +73,44 @@ Edit `.env` and add your API keys:
 
 ```env
 # Required
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
-PINECONE_API_KEY=your_pinecone_api_key_here
+ANTHROPIC_API_KEY=your_anthropic_api_key
+PINECONE_API_KEY=your_pinecone_api_key
 
 # Optional
-GITHUB_TOKEN=your_github_token_here
+GITHUB_TOKEN=your_github_token
 GITHUB_ORG=BHFDSC
 
-# Vector Store (default: pinecone)
-VECTOR_STORE_BACKEND=pinecone
+# Pinecone Settings
 PINECONE_INDEX_NAME=ccuindex
+PINECONE_CLOUD=aws
+PINECONE_REGION=us-east-1
 ```
-
-📖 **See [PINECONE_SETUP.md](PINECONE_SETUP.md) for detailed Pinecone configuration guide**
 
 ## Quick Start
 
-### Option 1: Deploy to Streamlit Cloud (Recommended for Quick Testing)
+### Option 1: Deploy to Streamlit Cloud
 
 1. Fork this repository
 2. Go to [share.streamlit.io](https://share.streamlit.io)
 3. Deploy the `app.py` file
-4. Add your `ANTHROPIC_API_KEY` in the Streamlit secrets settings
-5. Use the built-in "Setup" page to index repositories
-
-📖 See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
+4. Add your API keys in Streamlit secrets settings
+5. Use the "Setup" page to index repositories
 
 ### Option 2: Run Locally
 
 #### Step 1: Index the Repositories
 
-You can index repositories either via the UI or command line:
-
-**Via UI (Recommended):**
-1. Start the app: `streamlit run app.py`
-2. Go to the "Setup" page
-3. Click "Index/Re-index Repositories"
-
-**Via Command Line:**
-```bash
-python index_repos.py
-```
-
-This process will:
-- Fetch all repositories from the BHFDSC organization (~100 repos)
-- Download README files and other relevant files
-- Create embeddings and store them in ChromaDB
-- Save the vector store to the `chroma_db/` directory
-
-**Note**: Indexing takes 10-30 minutes depending on your internet connection.
-
-#### Step 2: Run the Streamlit App
-
-Once indexing is complete, start the Streamlit application:
+Start the app and use the UI to index:
 
 ```bash
 streamlit run app.py
 ```
 
-The app will open in your browser at `http://localhost:8501`.
+Then go to the "Setup" page and click "Index Repositories".
 
-#### Step 3: Ask Questions
+**Note**: Initial indexing takes 10-30 minutes depending on the number of repositories.
+
+#### Step 2: Ask Questions
 
 Type your questions in the chat interface. Example questions:
 
@@ -139,158 +118,88 @@ Type your questions in the chat interface. Example questions:
 - "Which repositories contain Python code for data analysis?"
 - "What phenotyping algorithms are used in the CCU projects?"
 - "Show me repositories that work with linked electronic health records"
-- "What machine learning methods are used in these projects?"
-
-## Deployment to Streamlit Cloud
-
-The application is designed to work seamlessly on Streamlit Cloud with built-in UI for indexing repositories.
-
-**Important:** Streamlit Cloud doesn't have persistent storage, so you'll need to re-index after app restarts. For production use, consider using a cloud vector database or self-hosting.
-
-See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment instructions and best practices.
-
-### Persistent Vector Database Options
-
-For production deployments or to avoid re-indexing on each restart, we provide several persistent vector database solutions:
-
-📋 **[View Detailed Proposal](PERSISTENT_VECTOR_DB_PROPOSAL.md)** - Comprehensive comparison of all options
-
-**Quick Summary:**
-- 🚀 **Quick Win**: Cloud Storage + ChromaDB sync (S3/GCS/Azure) - Minimal changes, low cost
-- 🏢 **Production**: Pinecone - Fully managed, excellent performance, free tier available
-- 💰 **Budget-Friendly**: Supabase + pgvector - Generous free tier (500MB), PostgreSQL-based
-
-See the `examples/` directory for ready-to-use implementation code:
-- `examples/cloud_storage_sync.py` - Sync ChromaDB with cloud storage
-- `examples/pinecone_backend.py` - Pinecone integration
-- `examples/supabase_backend.py` - Supabase + pgvector integration
-- `examples/README.md` - Detailed integration guide
 
 ## Configuration
 
-You can customize the application by modifying `config.py`:
+Key settings in `config.py`:
 
-- `ANTHROPIC_MODEL`: Change the Claude model (default: claude-3-5-sonnet-20241022)
-- `CHUNK_SIZE`: Adjust document chunk size for embeddings
-- `MAX_FILES_PER_REPO`: Limit files indexed per repository
-- `INDEXED_FILE_EXTENSIONS`: Add or remove file types to index
-
-### Test Mode for Development
-
-For quick testing and development, you can use a smaller subset of repositories instead of indexing all 100+ repos:
-
-**Option 1: Test Mode (Specific Repos)**
-1. Edit `config.py` and add specific repository names to the `TEST_REPOS` list:
-   ```python
-   TEST_REPOS = [
-       "repo-name-1",
-       "repo-name-2",
-       "repo-name-3"
-   ]
-   ```
-2. Enable test mode in your `.env` file:
-   ```env
-   USE_TEST_REPOS=true
-   ```
-3. Run indexing normally - only the repos in `TEST_REPOS` will be indexed
-
-**Option 2: Random Sampling**
-Set `SAMPLE_REPOS` in `config.py` to randomly sample N repositories:
-```python
-SAMPLE_REPOS = 20  # Index 20 random repos
-```
-
-**Option 3: UI Sampling**
-When using the Streamlit UI Setup page, check the "Sample 20 repos" checkbox for quick testing.
-
-**Benefits of Test Mode:**
-- ⚡ Much faster indexing (seconds instead of minutes)
-- 🧪 Predictable test data (same repos every time)
-- 💰 Lower API usage during development
-- 🐛 Easier debugging and iteration
+- `ANTHROPIC_MODEL`: Claude model to use (default: claude-opus-4-1)
+- `EMBEDDING_MODEL`: Sentence transformer model for embeddings
+- `CHUNK_SIZE`: Document chunk size (default: 1000 characters)
+- `CHUNK_OVERLAP`: Overlap between chunks (default: 200 characters)
+- `MAX_FILES_PER_REPO`: Maximum files to index per repository (default: 50)
+- `INDEXED_FILE_EXTENSIONS`: File types to index
 
 ## Project Structure
 
 ```
 ccurag/
-├── app.py                          # Streamlit application
-├── config.py                       # Configuration management
-├── github_indexer.py               # GitHub repository fetching
-├── vector_store.py                 # Vector store management (ChromaDB)
-├── qa_chain.py                     # QA system with Anthropic SDK
-├── index_repos.py                  # Script to index repositories
-├── requirements.txt                # Python dependencies
-├── .env.example                    # Example environment variables
-├── .gitignore                      # Git ignore file
-├── README.md                       # This file
-├── PERSISTENT_VECTOR_DB_PROPOSAL.md # Vector database options proposal
-├── examples/                       # Alternative vector database implementations
-│   ├── README.md                   # Integration guide
-│   ├── cloud_storage_sync.py       # Cloud storage sync implementation
-│   ├── pinecone_backend.py         # Pinecone implementation
-│   └── supabase_backend.py         # Supabase + pgvector implementation
-└── chroma_db/                      # Vector store (generated)
+├── app.py                    # Streamlit application
+├── config.py                 # Configuration settings
+├── github_indexer.py         # Repository fetching and indexing
+├── vector_store.py           # Vector store interface
+├── vector_store_pinecone.py  # Pinecone implementation
+├── qa_chain.py               # Question-answering system
+├── requirements.txt          # Dependencies
+├── .env.example              # Environment template
+└── README.md                 # This file
 ```
 
 ## How It Works
 
-1. **Indexing Phase**:
-   - Fetches all repositories from the BHFDSC GitHub organization
-   - Downloads README files and selected file types (Python, R, Markdown, etc.)
-   - Splits documents into chunks
-   - Creates embeddings using Sentence Transformers
-   - Stores embeddings in ChromaDB
+**Indexing Phase**:
+1. Fetches all repositories from the BHFDSC GitHub organization
+2. Downloads README files and code files (Python, R, Markdown, etc.)
+3. Splits documents into chunks
+4. Creates embeddings using Sentence Transformers
+5. Stores embeddings in Pinecone
 
-2. **Query Phase**:
-   - User asks a question via Streamlit UI
-   - Question is embedded and used to search the vector store
-   - Top-k most relevant document chunks are retrieved
-   - Retrieved context + question are sent to Claude API
-   - Claude generates an answer based on the context
-   - Answer and sources are displayed to the user
+**Query Phase**:
+1. User asks a question via Streamlit UI
+2. Question is embedded and used to search Pinecone
+3. Top-5 most relevant document chunks are retrieved
+4. Context + question sent to Claude API
+5. Claude generates answer based on context
+6. Answer and sources displayed to user
 
 ## Troubleshooting
 
-### Error: "ANTHROPIC_API_KEY is required"
+### "ANTHROPIC_API_KEY is required"
 
-Make sure you've created a `.env` file with your Anthropic API key.
+Make sure you've created a `.env` file with your API keys.
 
-### Error: "Vector store not found"
+### "PINECONE_API_KEY is required"
 
-Run `python index_repos.py` first to index the repositories.
+Add your Pinecone API key to the `.env` file.
 
 ### GitHub Rate Limiting
 
-If you encounter rate limiting errors, add a GitHub Personal Access Token to your `.env` file:
+Add a GitHub Personal Access Token to your `.env` file:
 
 ```env
-GITHUB_TOKEN=your_github_token_here
+GITHUB_TOKEN=your_github_token
 ```
-
-### Slow Indexing
-
-The indexing process can take time. You can reduce `MAX_FILES_PER_REPO` in `config.py` to index fewer files per repository.
 
 ## Technologies Used
 
-- **Anthropic Claude**: Advanced AI language model (via Anthropic Python SDK)
-- **ChromaDB**: Vector database for embeddings
-- **Sentence Transformers**: Embedding models
+- **Anthropic Claude**: AI language model
+- **Pinecone**: Cloud vector database
+- **Sentence Transformers**: Text embeddings
 - **Streamlit**: Web application framework
 - **PyGithub**: GitHub API library
 
 ## About BHFDSC
 
-The BHF Data Science Centre (BHFDSC) focuses on improving cardiovascular health through large-scale data analysis. Their repositories contain research code and analysis pipelines for studying COVID-19's impact on cardiovascular disease using linked electronic health records.
+The BHF Data Science Centre focuses on improving cardiovascular health through large-scale data analysis. Their repositories contain research code and analysis pipelines for studying COVID-19's impact on cardiovascular disease.
 
 ## License
 
-This project is for educational and research purposes. Please respect the licenses of the BHFDSC repositories when using information from them.
+This project is for educational and research purposes. Please respect the licenses of the BHFDSC repositories.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please submit a Pull Request.
 
 ## Support
 
-For issues or questions, please open an issue on the GitHub repository.
+For issues or questions, please open an issue on GitHub.

@@ -2,9 +2,7 @@
 
 import streamlit as st
 import logging
-from pathlib import Path
-import shutil
-from vector_store import VectorStoreManager
+from vector_store import get_vector_store
 from qa_chain import QASystem
 from config import Config
 from github_indexer import GitHubIndexer
@@ -22,24 +20,14 @@ st.set_page_config(
 
 
 def check_vector_store_exists():
-    """Check if vector store exists."""
-    backend = Config.VECTOR_STORE_BACKEND.lower()
-
-    if backend == "pinecone":
-        # Check if Pinecone index exists
-        try:
-            from pinecone import Pinecone
-            pc = Pinecone(api_key=Config.PINECONE_API_KEY)
-            existing_indexes = [index.name for index in pc.list_indexes()]
-            return Config.PINECONE_INDEX_NAME in existing_indexes
-        except Exception as e:
-            logger.error(f"Error checking Pinecone index: {e}")
-            return False
-    elif backend == "chroma":
-        # Check if ChromaDB directory exists
-        db_path = Path(Config.CHROMA_DB_DIR)
-        return db_path.exists() and any(db_path.iterdir())
-    else:
+    """Check if Pinecone vector store exists."""
+    try:
+        from pinecone import Pinecone
+        pc = Pinecone(api_key=Config.PINECONE_API_KEY)
+        existing_indexes = [index.name for index in pc.list_indexes()]
+        return Config.PINECONE_INDEX_NAME in existing_indexes
+    except Exception as e:
+        logger.error(f"Error checking Pinecone index: {e}")
         return False
 
 
@@ -53,7 +41,7 @@ def load_qa_system():
         if not check_vector_store_exists():
             return None
 
-        vector_store = VectorStoreManager()
+        vector_store = get_vector_store()
         vector_store.load_vectorstore()
 
         qa_system = QASystem(vector_store)
@@ -65,13 +53,8 @@ def load_qa_system():
         return None
 
 
-def run_indexing(sample_size=None):
-    """Run the repository indexing process with checkpoint/resume support.
-
-    Args:
-        sample_size: If provided, randomly sample this many repositories.
-                    If None, index all repositories.
-    """
+def run_indexing():
+    """Run the repository indexing process."""
     try:
         # Create progress indicators
         progress_bar = st.progress(0, text="Starting indexing process...")
@@ -81,22 +64,13 @@ def run_indexing(sample_size=None):
         with details_expander:
             repo_status = st.empty()
             doc_status = st.empty()
-            embedding_status = st.empty()
 
         # Initialize GitHub indexer
         indexer = GitHubIndexer(github_token=Config.GITHUB_TOKEN)
 
-        # Check for existing checkpoint
-        from pathlib import Path as CheckPath
-        checkpoint_file = CheckPath(".checkpoint.json")
-        if checkpoint_file.exists():
-            status_text.info("🔄 **Resuming from previous session...**")
-            with details_expander:
-                repo_status.info("📋 Found checkpoint file - resuming from where we left off")
-
-        # Phase 1: Fetch repositories
-        status_text.info("🔍 **Phase 1/2:** Fetching repository list from BHFDSC...")
-        repos = indexer.get_all_repos(sample_size=sample_size)
+        # Fetch repositories
+        status_text.info("🔍 Fetching repository list from BHFDSC...")
+        repos = indexer.get_all_repos()
         total_repos = len(repos)
 
         with details_expander:
@@ -104,24 +78,17 @@ def run_indexing(sample_size=None):
 
         progress_bar.progress(10, text=f"Found {total_repos} repositories")
 
-        # Phase 2 & 3: Index repositories with streaming insertion to Pinecone
-        status_text.info(f"📥 **Phase 2/2:** Indexing and uploading repositories (streaming mode)...")
-        status_text.caption("💾 Progress is automatically saved - you can safely interrupt and resume later")
+        # Index repositories
+        status_text.info(f"📥 Indexing and uploading repositories to Pinecone...")
 
-        # Initialize vector store for streaming upserts
-        vector_store = VectorStoreManager()
+        # Initialize vector store
+        vector_store = get_vector_store()
 
         with details_expander:
-            doc_status.info(f"🔄 Processing repositories in parallel with {Config.MAX_PARALLEL_WORKERS} workers (find → index → insert → checkpoint)")
+            doc_status.info(f"🔄 Processing repositories sequentially...")
 
-        # Use parallel indexing: process repos concurrently and insert to Pinecone
-        total_documents, changed_repos = indexer.index_all_repos(
-            sample_size=sample_size,
-            resume=True,
-            vector_store_manager=vector_store,
-            max_workers=Config.MAX_PARALLEL_WORKERS,
-            repos=repos  # Pass repos to avoid duplicate API calls
-        )
+        # Index all repos
+        total_documents = indexer.index_all_repos(vector_store=vector_store)
 
         if total_documents == 0:
             st.error("No documents found to index!")
@@ -132,19 +99,13 @@ def run_indexing(sample_size=None):
 
         with details_expander:
             doc_status.success(f"✅ Processed {total_documents} documents from {total_repos} repositories")
-            embedding_status.success(f"✅ All documents streamed to Pinecone successfully!")
 
         st.balloons()
         st.success(f"🎉 Successfully indexed {total_documents} documents from {total_repos} BHFDSC repositories!")
         return True
 
-    except KeyboardInterrupt:
-        st.warning("⚠️ Indexing interrupted by user")
-        st.info("💾 Progress has been saved. Click 'Index/Re-index Repositories' to resume.")
-        return False
     except Exception as e:
         st.error(f"❌ Error during indexing: {e}")
-        st.info("💾 Progress has been saved to .checkpoint.json. Click 'Index/Re-index Repositories' to resume from where you left off.")
         logger.error(f"Error during indexing: {e}", exc_info=True)
         return False
 
@@ -153,27 +114,14 @@ def render_admin_page():
     """Render the admin/setup page."""
     st.title("⚙️ Setup & Administration")
 
-    # Show info based on backend
-    if Config.VECTOR_STORE_BACKEND == "pinecone":
-        st.success(
-            """
-            **Using Pinecone Cloud Vector Database**
+    st.success(
+        """
+        **Using Pinecone Cloud Vector Database**
 
-            Your vector database is stored in Pinecone cloud and persists across app restarts.
-            You only need to index repositories once, and the data will remain available.
-            """
-        )
-    else:
-        st.info(
-            """
-            **Note for Streamlit Cloud Users:**
-
-            Streamlit Cloud doesn't have persistent storage, so the vector database will be lost when the app restarts.
-            You'll need to re-index the repositories after each deployment or app restart.
-
-            For production use, consider switching to Pinecone backend (set VECTOR_STORE_BACKEND=pinecone).
-            """
-        )
+        Your vector database is stored in Pinecone cloud and persists across app restarts.
+        You only need to index repositories once, and the data will remain available.
+        """
+    )
 
     st.divider()
 
@@ -188,22 +136,17 @@ def render_admin_page():
             st.success("✅ Vector store is ready")
             try:
                 # Try to get some stats
-                from vector_store import VectorStoreManager
-                vsm = VectorStoreManager()
+                vsm = get_vector_store()
                 vsm.load_vectorstore()
 
-                if Config.VECTOR_STORE_BACKEND == "pinecone":
-                    st.metric("Backend", "Pinecone Cloud")
-                    st.metric("Index Name", Config.PINECONE_INDEX_NAME)
-                    try:
-                        stats = vsm.get_stats()
-                        vector_count = stats.get('total_vector_count', 0)
-                        st.metric("Total Vectors", f"{vector_count:,}")
-                    except:
-                        pass
-                else:
-                    st.metric("Backend", "ChromaDB (Local)")
-                    st.metric("Database Location", Config.CHROMA_DB_DIR)
+                st.metric("Backend", "Pinecone Cloud")
+                st.metric("Index Name", Config.PINECONE_INDEX_NAME)
+                try:
+                    stats = vsm.get_stats()
+                    vector_count = stats.get('total_vector_count', 0)
+                    st.metric("Total Vectors", f"{vector_count:,}")
+                except:
+                    pass
             except Exception as e:
                 st.warning(f"Vector store exists but couldn't load stats: {e}")
         else:
@@ -218,49 +161,25 @@ def render_admin_page():
             st.session_state.confirm_indexing = False
         if "indexing_started" not in st.session_state:
             st.session_state.indexing_started = False
-        if "sample_repos" not in st.session_state:
-            st.session_state.sample_repos = False
 
         # Show initial button or confirmation
         if not st.session_state.confirm_indexing and not st.session_state.indexing_started:
-            if st.button("🔄 Index/Re-index Repositories", type="primary", use_container_width=True):
+            if st.button("🔄 Index Repositories", type="primary", use_container_width=True):
                 st.session_state.confirm_indexing = True
                 st.rerun()
 
         if st.session_state.confirm_indexing and not st.session_state.indexing_started:
-            # Add sampling option checkbox
-            st.session_state.sample_repos = st.checkbox(
-                "Sample 20 random repositories (faster for testing)",
-                value=st.session_state.sample_repos,
-                help="Enable this to index only 20 random repositories instead of all repositories. Useful for quick testing."
+            st.warning(
+                """
+                **This will:**
+                - Fetch all repositories from BHFDSC GitHub organization
+                - Download README files and code files
+                - Create embeddings and store them in Pinecone
+                - Take approximately 10-30 minutes
+
+                **Proceed?**
+                """
             )
-
-            backend_name = "Pinecone" if Config.VECTOR_STORE_BACKEND == "pinecone" else "ChromaDB"
-
-            if st.session_state.sample_repos:
-                st.warning(
-                    f"""
-                    **This will:**
-                    - Fetch 20 random repositories from BHFDSC GitHub organization
-                    - Download README files and code files
-                    - Create embeddings and store them in {backend_name}
-                    - Take approximately 2-5 minutes
-
-                    **Proceed?**
-                    """
-                )
-            else:
-                st.warning(
-                    f"""
-                    **This will:**
-                    - Fetch all repositories from BHFDSC GitHub organization
-                    - Download README files and code files
-                    - Create embeddings and store them in {backend_name}
-                    - Take approximately 10-30 minutes
-
-                    **Proceed?**
-                    """
-                )
 
             col_yes, col_no = st.columns(2)
             with col_yes:
@@ -275,8 +194,7 @@ def render_admin_page():
 
         # Run indexing if started
         if st.session_state.indexing_started:
-            sample_size = 20 if st.session_state.sample_repos else None
-            success = run_indexing(sample_size=sample_size)
+            success = run_indexing()
 
             # Reset states
             st.session_state.indexing_started = False
@@ -295,15 +213,9 @@ def render_admin_page():
             st.divider()
             if st.button("🗑️ Delete Vector Store", type="secondary", use_container_width=True):
                 try:
-                    if Config.VECTOR_STORE_BACKEND == "pinecone":
-                        from vector_store import VectorStoreManager
-                        vsm = VectorStoreManager()
-                        vsm.delete_vectorstore()
-                        st.success("Pinecone index deleted.")
-                    else:
-                        db_path = Path(Config.CHROMA_DB_DIR)
-                        shutil.rmtree(db_path)
-                        st.success("ChromaDB vector store deleted.")
+                    vsm = get_vector_store()
+                    vsm.delete_vectorstore()
+                    st.success("Pinecone index deleted.")
                     st.cache_resource.clear()
                     st.rerun()
                 except Exception as e:
@@ -315,7 +227,7 @@ def render_admin_page():
     st.code(f"""
 GitHub Organization: {Config.GITHUB_ORG}
 Anthropic Model: {Config.ANTHROPIC_MODEL}
-Vector Store: {Config.CHROMA_DB_DIR}
+Vector Store: Pinecone ({Config.PINECONE_INDEX_NAME})
 Chunk Size: {Config.CHUNK_SIZE}
 Chunk Overlap: {Config.CHUNK_OVERLAP}
 Max Files per Repo: {Config.MAX_FILES_PER_REPO}
@@ -328,7 +240,7 @@ def render_qa_page():
     st.markdown(
         """
         Ask questions about the [BHFDSC GitHub organization](https://github.com/BHFDSC) repositories.
-        This system uses AI to search through ~100 repositories focused on cardiovascular health research
+        This system uses AI to search through repositories focused on cardiovascular health research
         and COVID-19 impacts.
         """
     )
@@ -340,7 +252,7 @@ def render_qa_page():
             """
             This application uses:
             - **Anthropic Claude** for AI responses
-            - **ChromaDB** for vector storage
+            - **Pinecone** for vector storage
             - **Sentence Transformers** for embeddings
 
             **Indexed Organization:** BHFDSC
@@ -433,7 +345,7 @@ def render_qa_page():
         with st.chat_message("assistant"):
             with st.spinner("Searching repositories and generating answer..."):
                 try:
-                    result = qa_system.answer_question(question)
+                    result = qa_system.answer_question(question, num_docs=k_docs)
 
                     answer = result["answer"]
                     sources = result["source_documents"]

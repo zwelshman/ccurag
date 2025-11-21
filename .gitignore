@@ -8,7 +8,5 @@ __pycache__/
 venv/
 ENV/
 .venv
-chroma_db/
 *.log
 .DS_Store
-.checkpoint.json

@@ -1,10 +1,9 @@
 """Simple question-answering system using RAG."""
 
 import logging
-from typing import Dict, List
+from typing import Dict
 from anthropic import Anthropic
 from config import Config
-from vector_store import VectorStoreManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -13,11 +12,11 @@ logger = logging.getLogger(__name__)
 class QASystem:
     """Simple RAG-based question-answering system."""
 
-    def __init__(self, vector_store: VectorStoreManager):
+    def __init__(self, vector_store):
         """Initialize QA system.
 
         Args:
-            vector_store: Vector store for document retrieval
+            vector_store: Pinecone vector store for document retrieval
         """
         Config.validate()
         self.vector_store = vector_store
