@@ -65,6 +65,11 @@ class Config:
         ".txt", ".rst", ".html", ".yaml", ".yml", ".json", ".sql"
     ]
 
+    # Hybrid Search Settings
+    USE_HYBRID_SEARCH = get_secret("USE_HYBRID_SEARCH", "true").lower() == "true"
+    BM25_WEIGHT = float(get_secret("BM25_WEIGHT", "0.4"))  # 40% BM25, 60% vector by default
+    USE_ADAPTIVE_WEIGHTS = get_secret("USE_ADAPTIVE_WEIGHTS", "true").lower() == "true"
+
     @classmethod
     def validate(cls):
         """Validate required configuration."""

@@ -100,14 +100,17 @@ logger = logging.getLogger(__name__)
 class QASystem:
     """Enhanced RAG-based question-answering system for BHFDSC GitHub organization."""
 
-    def __init__(self, vector_store):
+    def __init__(self, vector_store, retriever=None):
         """Initialize QA system with enhanced prompting.
 
         Args:
             vector_store: Pinecone vector store for document retrieval
+            retriever: Optional custom retriever (e.g., HybridRetriever).
+                      If None, uses vector_store directly.
         """
         Config.validate()
         self.vector_store = vector_store
+        self.retriever = retriever if retriever is not None else vector_store
         self.client = Anthropic(api_key=Config.ANTHROPIC_API_KEY)
 
         self.system_prompt = """You are an AI assistant specializing in the BHF Data Science Centre (BHFDSC) GitHub organization. Your role is to help researchers understand the codebase, documentation, and best practices.
@@ -154,8 +157,8 @@ Guidelines:
         logger.info(f"Answering question: {question}")
         
         try:
-            # Retrieve relevant documents
-            docs = self.vector_store.similarity_search(question, k=num_docs)
+            # Retrieve relevant documents using the configured retriever
+            docs = self.retriever.similarity_search(question, k=num_docs)
             
             if not docs:
                 return self._create_no_context_response(question)
