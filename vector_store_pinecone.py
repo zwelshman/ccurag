@@ -322,7 +322,7 @@ class PineconeVectorStore:
 
         return self.index
 
-    def similarity_search(self, query: str, k: int = 5) -> List[Document]:
+    def similarity_search(self, query: str, k: int = 20) -> List[Document]:
         """
         Perform similarity search.
 

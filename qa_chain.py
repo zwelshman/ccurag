@@ -136,9 +136,9 @@ Guidelines:
                    "cannot determine", "no information"]
         }
 
-    def answer_question(self, 
-                       question: str, 
-                       num_docs: int = 5,
+    def answer_question(self,
+                       question: str,
+                       num_docs: int = 20,
                        use_cot: Optional[bool] = None,
                        include_follow_ups: bool = True,
                        include_metadata: bool = True) -> Dict:
