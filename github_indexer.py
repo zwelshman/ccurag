@@ -415,6 +415,19 @@ class GitHubIndexer:
             # Step 2: Insert into Pinecone
             if vector_store_manager:
                 logger.info(f"[2/3] Inserting {doc_count} documents into Pinecone...")
+
+                # Always delete existing vectors for this repo first to prevent duplicates
+                # This handles both re-indexing scenarios:
+                # 1. Repo was fully processed before (in checkpoint)
+                # 2. Repo had partial upload before crash (not in checkpoint, but has vectors)
+                logger.info(f"Cleaning up any existing vectors for {repo_full_name}...")
+                try:
+                    vector_store_manager.delete_repo_vectors(repo_full_name)
+                    logger.info(f"✓ Deleted any existing vectors for {repo_full_name}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete old vectors for {repo_full_name}: {e}")
+                    logger.info("Continuing with upsert - this may create duplicates if vectors existed")
+
                 vector_store_manager.upsert_documents(repo_documents, repo_name=repo_full_name)
                 logger.info(f"✓ Inserted {doc_count} documents into Pinecone")
             else:
