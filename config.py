@@ -55,8 +55,8 @@ class Config:
     EMBEDDING_MODEL = "BAAI/llm-embedder" 
 
     # Document Processing
-    CHUNK_SIZE = 512
-    CHUNK_OVERLAP = 150
+    CHUNK_SIZE = 1000
+    CHUNK_OVERLAP = 200
     MAX_FILES_PER_REPO = 75
 
     # File types to index
