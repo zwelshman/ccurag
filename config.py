@@ -58,7 +58,7 @@ class Config:
     PINECONE_DIMENSION = int(get_secret("PINECONE_DIMENSION", "384"))
 
     # Model Settings
-    ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
+    ANTHROPIC_MODEL = "claude-opus-4-1"
     EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # 384 dimensions
 
     # Chunking Settings
