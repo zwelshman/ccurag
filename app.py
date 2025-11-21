@@ -119,7 +119,8 @@ def run_indexing(sample_size=None):
             sample_size=sample_size,
             resume=True,
             vector_store_manager=vector_store_manager,
-            max_workers=Config.MAX_PARALLEL_WORKERS
+            max_workers=Config.MAX_PARALLEL_WORKERS,
+            repos=repos  # Pass repos to avoid duplicate API calls
         )
 
         if total_documents == 0:
