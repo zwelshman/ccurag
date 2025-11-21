@@ -326,10 +326,11 @@ def render_qa_page():
             if message["role"] == "assistant" and "sources" in message:
                 with st.expander("📚 View Sources"):
                     for i, source in enumerate(message["sources"], 1):
-                        st.markdown(f"**{i}. [{source['source']}]({source['url']})**")
-                        if source.get("repo"):
-                            st.caption(f"Repository: {source['repo']}")
-                        st.text(source['content'])
+                        metadata = source.get('metadata', {})
+                        st.markdown(f"**{i}. [{metadata.get('source', 'Unknown')}]({metadata.get('url', '')})**")
+                        if metadata.get("repo"):
+                            st.caption(f"Repository: {metadata['repo']}")
+                        st.text(source.get('content_preview', source.get('full_content', '')))
                         st.divider()
 
     # Chat input
@@ -357,10 +358,11 @@ def render_qa_page():
                     if sources:
                         with st.expander("📚 View Sources"):
                             for i, source in enumerate(sources, 1):
-                                st.markdown(f"**{i}. [{source['source']}]({source['url']})**")
-                                if source.get("repo"):
-                                    st.caption(f"Repository: {source['repo']}")
-                                st.text(source['content'])
+                                metadata = source.get('metadata', {})
+                                st.markdown(f"**{i}. [{metadata.get('source', 'Unknown')}]({metadata.get('url', '')})**")
+                                if metadata.get("repo"):
+                                    st.caption(f"Repository: {metadata['repo']}")
+                                st.text(source.get('content_preview', source.get('full_content', '')))
                                 st.divider()
 
                     # Add assistant message to chat history
