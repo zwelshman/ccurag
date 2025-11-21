@@ -269,8 +269,8 @@ def render_qa_page():
         k_docs = st.slider(
             "Number of source documents",
             min_value=3,
-            max_value=10,
-            value=5,
+            max_value=20,
+            value=20,
             help="Number of relevant documents to retrieve"
         )
 

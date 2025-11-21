@@ -203,7 +203,7 @@ class HybridRetriever:
             # Conceptual query: favor vector search
             return (0.3, 0.7)
 
-    def similarity_search(self, query: str, k: int = 5,
+    def similarity_search(self, query: str, k: int = 20,
                          use_adaptive_weights: bool = None) -> List[Document]:
         """Perform hybrid search combining BM25 and vector similarity.
 
