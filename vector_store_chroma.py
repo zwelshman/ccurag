@@ -2,6 +2,7 @@
 
 import logging
 from typing import List, Dict
+import torch
 import chromadb
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
@@ -23,7 +24,10 @@ class ChromaVectorStore:
 
     def __init__(self):
         """Initialize vector store components."""
-        self.embedding_model = SentenceTransformer(Config.EMBEDDING_MODEL)
+        # Initialize embedding model with explicit device to avoid meta tensor issues
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        logger.info(f"Loading SentenceTransformer on device: {device}")
+        self.embedding_model = SentenceTransformer(Config.EMBEDDING_MODEL, device=device)
         self.client = None
         self.collection = None
 
