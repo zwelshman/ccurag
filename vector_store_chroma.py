@@ -24,10 +24,13 @@ class ChromaVectorStore:
 
     def __init__(self):
         """Initialize vector store components."""
+        logger.info("Initializing ChromaDB vector store...")
         # Initialize embedding model with explicit device to avoid meta tensor issues
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        logger.info(f"Loading SentenceTransformer on device: {device}")
+        logger.info(f"Loading SentenceTransformer model '{Config.EMBEDDING_MODEL}' on device: {device}")
+        logger.info("This may take 1-5 minutes on first run (downloading model from HuggingFace)...")
         self.embedding_model = SentenceTransformer(Config.EMBEDDING_MODEL, device=device)
+        logger.info("✓ SentenceTransformer model loaded successfully")
         self.client = None
         self.collection = None
 
@@ -57,7 +60,12 @@ class ChromaVectorStore:
             documents: List of documents to index
             progress_callback: Optional callback function(message: str, progress_pct: float)
         """
-        logger.info(f"Processing {len(documents)} documents...")
+        logger.info("=" * 60)
+        logger.info("STARTING VECTOR STORE CREATION")
+        logger.info("=" * 60)
+        logger.info(f"Processing {len(documents)} documents for ChromaDB...")
+        logger.info(f"Estimated chunks: ~{len(documents) * 3} (varies by document size)")
+        logger.info(f"This process may take 10-30 minutes depending on document count...")
 
         def update_progress(msg: str, pct: float):
             """Helper to update progress via callback or logging."""
@@ -122,6 +130,7 @@ class ChromaVectorStore:
         update_progress("Creating embeddings and adding to vector store...", 0.35)
         batch_size = 100
         total_batches = (len(all_texts) + batch_size - 1) // batch_size
+        logger.info(f"Will process {total_batches} batches of ~{batch_size} chunks each")
 
         for i in range(0, len(all_texts), batch_size):
             batch_num = i // batch_size + 1
@@ -130,19 +139,23 @@ class ChromaVectorStore:
             batch_ids = all_ids[i:i + batch_size]
 
             # Create embeddings
+            logger.info(f"[Batch {batch_num}/{total_batches}] Creating embeddings for {len(batch_texts)} chunks...")
             embeddings = self.embedding_model.encode(batch_texts).tolist()
+            logger.info(f"[Batch {batch_num}/{total_batches}] ✓ Embeddings created")
 
             # Add to collection
+            logger.info(f"[Batch {batch_num}/{total_batches}] Adding to ChromaDB...")
             self.collection.add(
                 documents=batch_texts,
                 embeddings=embeddings,
                 metadatas=batch_metadata,
                 ids=batch_ids
             )
+            logger.info(f"[Batch {batch_num}/{total_batches}] ✓ Added to database")
 
             # Update progress (35% to 95%)
             pct = 0.35 + (batch_num / total_batches) * 0.6
-            update_progress(f"Adding batch {batch_num}/{total_batches} to vector store", pct)
+            update_progress(f"Completed batch {batch_num}/{total_batches}", pct)
 
         update_progress("Vector store created successfully!", 1.0)
         return self.collection
