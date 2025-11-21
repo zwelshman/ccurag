@@ -55,9 +55,9 @@ class Config:
     EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
     # Document Processing
-    CHUNK_SIZE = 1000
-    CHUNK_OVERLAP = 200
-    MAX_FILES_PER_REPO = 50
+    CHUNK_SIZE = 512
+    CHUNK_OVERLAP = 150
+    MAX_FILES_PER_REPO = 75
 
     # File types to index
     INDEXED_FILE_EXTENSIONS = [
