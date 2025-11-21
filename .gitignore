@@ -10,3 +10,4 @@ ENV/
 .venv
 *.log
 .DS_Store
+.cache/
