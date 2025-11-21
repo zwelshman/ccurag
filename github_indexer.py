@@ -432,7 +432,7 @@ class GitHubIndexer:
             logger.error(f"❌ Failed to process repo {repo_full_name}: {e}")
             return (repo_full_name, 0, False)
 
-    def index_all_repos(self, sample_size: Optional[int] = None, resume: bool = True, vector_store_manager=None, max_workers: int = 5) -> Tuple[int, List[str]]:
+    def index_all_repos(self, sample_size: Optional[int] = None, resume: bool = True, vector_store_manager=None, max_workers: int = 5, repos: Optional[List[Dict]] = None) -> Tuple[int, List[str]]:
         """Index all repositories with parallel processing and Pinecone insertion.
 
         This method processes repos in parallel:
@@ -448,6 +448,7 @@ class GitHubIndexer:
             vector_store_manager: Vector store instance to use for upserting.
                                 If None, no upserting will occur (docs only).
             max_workers: Maximum number of parallel worker threads (default: 5)
+            repos: Optional list of repositories to process. If None, will fetch from GitHub.
 
         Returns:
             Tuple of (total_documents, changed_repos) where:
@@ -457,7 +458,11 @@ class GitHubIndexer:
         logger.info(f"Starting parallel repository indexing with {max_workers} workers")
 
         total_documents_processed = 0
-        repos = self.get_all_repos(sample_size=sample_size)
+
+        # Use provided repos or fetch them if not provided
+        if repos is None:
+            repos = self.get_all_repos(sample_size=sample_size)
+
         total_repos = len(repos)
 
         # Load checkpoint if resume is enabled
