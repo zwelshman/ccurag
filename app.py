@@ -416,10 +416,7 @@ def render_qa_page():
     cols = st.columns(2)
     for i, example in enumerate(example_questions):
         with cols[i % 2]:
-            if st.button(example, key=f"example_{i}"):
-                # Trigger the question
-                st.session_state.messages.append({"role": "user", "content": example})
-                st.rerun()
+            st.markdown(f"- {example}")
 
     # Q&A Chat (shown below example questions)
     st.divider()
