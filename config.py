@@ -79,7 +79,7 @@ class Config:
 
     # Test repository subset (for quick testing and development)
     # Set USE_TEST_REPOS=true in .env to enable test mode
-    USE_TEST_REPOS = get_secret("USE_TEST_REPOS", "false").lower() in ["true", "1", "yes"]
+    USE_TEST_REPOS = str(get_secret("USE_TEST_REPOS", "false")).lower() in ["true", "1", "yes"]
     TEST_REPOS = [
         "hds_curated_assets","documentation"
     ]
