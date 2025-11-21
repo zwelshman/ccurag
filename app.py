@@ -94,22 +94,23 @@ def run_indexing(sample_size=None):
             with details_expander:
                 repo_status.info("📋 Found checkpoint file - resuming from where we left off")
 
-        # Phase 1: Fetch repositories
-        status_text.info("🔍 **Phase 1/3:** Fetching repository list from BHFDSC...")
-        repos = indexer.get_all_repos(sample_size=sample_size)
-        total_repos = len(repos)
+        # Phase 1 & 2 Combined: Fetch and index repositories
+        status_text.info("🔍 **Phase 1/2:** Fetching repository list from BHFDSC...")
+        progress_bar.progress(10, text="Fetching repository list...")
 
         with details_expander:
-            repo_status.success(f"✅ Found {total_repos} repositories")
+            repo_status.info("📋 Retrieving repository information...")
 
-        progress_bar.progress(10, text=f"Found {total_repos} repositories")
-
-        # Phase 2: Index repository contents (with automatic checkpoint/resume)
-        status_text.info(f"📥 **Phase 2/3:** Indexing contents from {total_repos} repositories...")
         status_text.caption("💾 Progress is automatically saved - you can safely interrupt and resume later")
 
-        # Use the checkpoint-enabled indexing method
+        # Use the checkpoint-enabled indexing method (fetches repos internally)
         all_documents, changed_repos = indexer.index_all_repos(sample_size=sample_size, resume=True)
+
+        # Get total repos from the checkpoint
+        total_repos = indexer.checkpoint_manager.checkpoint_data.get('total_repos', 0)
+
+        with details_expander:
+            repo_status.success(f"✅ Processed {total_repos} repositories")
 
         # Update progress bar to completion of phase 2
         progress_bar.progress(50, text="Repository indexing complete")
@@ -121,8 +122,8 @@ def run_indexing(sample_size=None):
         with details_expander:
             doc_status.success(f"✅ Collected {len(all_documents)} documents from {total_repos} repositories")
 
-        # Phase 3: Create vector store
-        status_text.info(f"🧮 **Phase 3/3:** Creating vector store from {len(all_documents)} documents...")
+        # Phase 2: Create vector store
+        status_text.info(f"🧮 **Phase 2/2:** Creating vector store from {len(all_documents)} documents...")
         progress_bar.progress(50, text="Creating vector embeddings...")
 
         # Remove existing database if it exists
