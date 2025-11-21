@@ -269,12 +269,13 @@ class GitHubIndexer:
             logger.error(f"Error fetching repositories: {e}")
             raise
 
-    def get_repo_contents(self, repo_full_name: str, max_retries: int = 4) -> List[Dict]:
+    def get_repo_contents(self, repo_full_name: str, max_retries: int = 4, commit_sha: Optional[str] = None) -> List[Dict]:
         """Fetch file contents from a repository with retry logic.
 
         Args:
             repo_full_name: Full name of repository (e.g., "owner/repo")
             max_retries: Maximum number of retry attempts for rate limit errors
+            commit_sha: Latest commit SHA for temporal metadata
 
         Returns:
             List of document dictionaries
@@ -287,6 +288,15 @@ class GitHubIndexer:
             try:
                 repo = self.github.get_repo(repo_full_name)
 
+                # Get repo's last commit date for temporal metadata
+                repo_updated_at = None
+                try:
+                    if commit_sha:
+                        commit = repo.get_commit(commit_sha)
+                        repo_updated_at = commit.commit.author.date.isoformat()
+                except:
+                    pass  # If we can't get commit date, continue without it
+
                 # Get README
                 try:
                     readme = repo.get_readme()
@@ -298,6 +308,9 @@ class GitHubIndexer:
                             "repo": repo_full_name,
                             "type": "readme",
                             "url": readme.html_url,
+                            "updated_at": repo_updated_at if repo_updated_at else datetime.now().isoformat(),
+                            "indexed_at": datetime.now().isoformat(),
+                            "commit_sha": commit_sha if commit_sha else "unknown",
                         }
                     })
                     logger.info(f"Fetched README for {repo_full_name}")
@@ -335,6 +348,9 @@ class GitHubIndexer:
                                             "type": "file",
                                             "url": file_content.html_url,
                                             "path": file_content.path,
+                                            "updated_at": repo_updated_at if repo_updated_at else datetime.now().isoformat(),
+                                            "indexed_at": datetime.now().isoformat(),
+                                            "commit_sha": commit_sha if commit_sha else "unknown",
                                         }
                                     })
                                     file_count += 1
@@ -393,6 +409,17 @@ class GitHubIndexer:
             # Step 1: Index repo - collect documents
             logger.info(f"[1/3] Indexing {repo_full_name}...")
 
+            # Get repo's last commit date for temporal metadata
+            repo_updated_at = None
+            commit_sha = repo.get('commit_sha')
+            if commit_sha:
+                try:
+                    github_repo = self.github.get_repo(repo_full_name)
+                    commit = github_repo.get_commit(commit_sha)
+                    repo_updated_at = commit.commit.author.date.isoformat()
+                except:
+                    pass  # If we can't get commit date, continue without it
+
             # Add repo metadata as a document
             repo_doc = {
                 "content": f"Repository: {repo['name']}\n\nDescription: {repo['description']}\n\nLanguage: {repo['language']}\n\nTopics: {', '.join(repo['topics'])}",
@@ -401,11 +428,14 @@ class GitHubIndexer:
                     "repo": repo['full_name'],
                     "type": "repo_info",
                     "url": repo['url'],
+                    "updated_at": repo_updated_at if repo_updated_at else datetime.now().isoformat(),
+                    "indexed_at": datetime.now().isoformat(),
+                    "commit_sha": commit_sha if commit_sha else "unknown",
                 }
             }
 
             # Get file contents
-            repo_contents = self.get_repo_contents(repo_full_name)
+            repo_contents = self.get_repo_contents(repo_full_name, commit_sha=repo.get('commit_sha'))
 
             # Combine all documents for this repo
             repo_documents = [repo_doc] + repo_contents
