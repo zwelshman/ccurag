@@ -95,7 +95,7 @@ When referencing specific repositories or code, include the source information."
             "query_type": "repository_list"
         }
 
-    def _handle_temporal_query(self, question: str, k: int = 10) -> Dict:
+    def _handle_temporal_query(self, question: str, k: int = 20) -> Dict:
         """Handle queries asking for latest/recent projects.
 
         Args:
@@ -127,7 +127,7 @@ When referencing specific repositories or code, include the source information."
         # Continue with normal RAG flow using recent_docs
         return self._generate_answer_from_docs(question, recent_docs, query_type="latest_projects")
 
-    def _handle_general_qa(self, question: str, k: int = 5) -> Dict:
+    def _handle_general_qa(self, question: str, k: int = 20) -> Dict:
         """Handle general question-answering queries.
 
         Args:
