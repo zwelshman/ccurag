@@ -28,7 +28,7 @@ Use the following pieces of context from the organization's repositories to answ
 
 When referencing specific repositories or code, include the source information."""
 
-    def answer_question(self, question: str, k: int = 5) -> Dict:
+    def answer_question(self, question: str, k: int = 20) -> Dict:
         """Answer a question using RAG with query routing.
 
         Args:
