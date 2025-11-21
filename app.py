@@ -53,10 +53,10 @@ def load_qa_system():
         if not check_vector_store_exists():
             return None
 
-        vector_store_manager = VectorStoreManager()
-        vector_store_manager.load_vectorstore()
+        vector_store = VectorStoreManager()
+        vector_store.load_vectorstore()
 
-        qa_system = QASystem(vector_store_manager)
+        qa_system = QASystem(vector_store)
         return qa_system
 
     except Exception as e:
@@ -109,7 +109,7 @@ def run_indexing(sample_size=None):
         status_text.caption("💾 Progress is automatically saved - you can safely interrupt and resume later")
 
         # Initialize vector store for streaming upserts
-        vector_store_manager = VectorStoreManager()
+        vector_store = VectorStoreManager()
 
         with details_expander:
             doc_status.info(f"🔄 Processing repositories in parallel with {Config.MAX_PARALLEL_WORKERS} workers (find → index → insert → checkpoint)")
@@ -118,7 +118,7 @@ def run_indexing(sample_size=None):
         total_documents, changed_repos = indexer.index_all_repos(
             sample_size=sample_size,
             resume=True,
-            vector_store_manager=vector_store_manager,
+            vector_store_manager=vector_store,
             max_workers=Config.MAX_PARALLEL_WORKERS,
             repos=repos  # Pass repos to avoid duplicate API calls
         )
