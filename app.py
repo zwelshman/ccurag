@@ -112,13 +112,14 @@ def run_indexing(sample_size=None):
         vector_store_manager = VectorStoreManager()
 
         with details_expander:
-            doc_status.info("🔄 Processing repositories one at a time (find → index → insert → checkpoint)")
+            doc_status.info(f"🔄 Processing repositories in parallel with {Config.MAX_PARALLEL_WORKERS} workers (find → index → insert → checkpoint)")
 
-        # Use streaming indexing: process each repo and immediately insert to Pinecone
+        # Use parallel indexing: process repos concurrently and insert to Pinecone
         total_documents, changed_repos = indexer.index_all_repos(
             sample_size=sample_size,
             resume=True,
-            vector_store_manager=vector_store_manager
+            vector_store_manager=vector_store_manager,
+            max_workers=Config.MAX_PARALLEL_WORKERS
         )
 
         if total_documents == 0:
