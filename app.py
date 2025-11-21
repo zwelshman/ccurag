@@ -4,8 +4,6 @@ import streamlit as st
 import logging
 from pathlib import Path
 import shutil
-import zipfile
-import io
 from vector_store import VectorStoreManager
 from qa_chain import QASystem
 from config import Config
