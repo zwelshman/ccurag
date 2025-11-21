@@ -164,27 +164,46 @@ class PineconeVectorStore:
             batch_metadata = all_metadatas[i:i + batch_size]
             batch_ids = all_ids[i:i + batch_size]
 
-            # Create embeddings
-            logger.info(f"[Batch {batch_num}/{total_batches}] Creating embeddings for {len(batch_texts)} chunks...")
-            embeddings = self.embedding_model.encode(batch_texts).tolist()
-            logger.info(f"[Batch {batch_num}/{total_batches}] ✓ Embeddings created")
+            try:
+                # Create embeddings
+                logger.info(f"[Batch {batch_num}/{total_batches}] Creating embeddings for {len(batch_texts)} chunks...")
+                embeddings = self.embedding_model.encode(batch_texts).tolist()
+                logger.info(f"[Batch {batch_num}/{total_batches}] ✓ Embeddings created")
 
-            # Prepare vectors for Pinecone
-            vectors = []
-            for idx, (doc_id, embedding, metadata) in enumerate(zip(batch_ids, embeddings, batch_metadata)):
-                # Add the text content to metadata
-                metadata_with_text = metadata.copy()
-                metadata_with_text['text'] = batch_texts[idx]
-                vectors.append((doc_id, embedding, metadata_with_text))
+                # Prepare vectors for Pinecone
+                vectors = []
+                for idx, (doc_id, embedding, metadata) in enumerate(zip(batch_ids, embeddings, batch_metadata)):
+                    # Add the text content to metadata
+                    metadata_with_text = metadata.copy()
+                    metadata_with_text['text'] = batch_texts[idx]
+                    vectors.append((doc_id, embedding, metadata_with_text))
 
-            # Upsert to Pinecone
-            logger.info(f"[Batch {batch_num}/{total_batches}] Uploading to Pinecone...")
-            self.index.upsert(vectors=vectors)
-            logger.info(f"[Batch {batch_num}/{total_batches}] ✓ Upload complete")
+                # Upsert to Pinecone with retry logic
+                logger.info(f"[Batch {batch_num}/{total_batches}] Uploading to Pinecone...")
+                max_retries = 3
+                for retry in range(max_retries):
+                    try:
+                        self.index.upsert(vectors=vectors)
+                        logger.info(f"[Batch {batch_num}/{total_batches}] ✓ Upload complete")
+                        break
+                    except Exception as upsert_error:
+                        if retry < max_retries - 1:
+                            wait_time = 2 ** retry  # Exponential backoff: 1s, 2s, 4s
+                            logger.warning(f"[Batch {batch_num}/{total_batches}] Upload failed (attempt {retry + 1}/{max_retries}): {upsert_error}")
+                            logger.info(f"Retrying in {wait_time}s...")
+                            time.sleep(wait_time)
+                        else:
+                            logger.error(f"[Batch {batch_num}/{total_batches}] ❌ Upload failed after {max_retries} attempts: {upsert_error}")
+                            raise  # Re-raise after exhausting retries
 
-            # Update progress (35% to 95%)
-            pct = 0.35 + (batch_num / total_batches) * 0.6
-            update_progress(f"Completed batch {batch_num}/{total_batches}", pct)
+                # Update progress (35% to 95%)
+                pct = 0.35 + (batch_num / total_batches) * 0.6
+                update_progress(f"Completed batch {batch_num}/{total_batches}", pct)
+
+            except Exception as e:
+                logger.error(f"[Batch {batch_num}/{total_batches}] ❌ Critical error processing batch: {e}")
+                logger.error(f"Error type: {type(e).__name__}")
+                raise  # Re-raise to be handled by caller
 
         update_progress("Vector store created successfully!", 1.0)
         logger.info(f"Successfully indexed {len(all_texts)} chunks to Pinecone")
@@ -286,21 +305,40 @@ class PineconeVectorStore:
             batch_metadata = all_metadatas[i:i + batch_size]
             batch_ids = all_ids[i:i + batch_size]
 
-            # Create embeddings
-            logger.info(f"  [Batch {batch_num}/{total_batches}] Creating embeddings for {len(batch_texts)} chunks...")
-            embeddings = self.embedding_model.encode(batch_texts).tolist()
+            try:
+                # Create embeddings
+                logger.info(f"  [Batch {batch_num}/{total_batches}] Creating embeddings for {len(batch_texts)} chunks...")
+                embeddings = self.embedding_model.encode(batch_texts).tolist()
 
-            # Prepare vectors for Pinecone
-            vectors = []
-            for idx, (doc_id, embedding, metadata) in enumerate(zip(batch_ids, embeddings, batch_metadata)):
-                metadata_with_text = metadata.copy()
-                metadata_with_text['text'] = batch_texts[idx]
-                vectors.append((doc_id, embedding, metadata_with_text))
+                # Prepare vectors for Pinecone
+                vectors = []
+                for idx, (doc_id, embedding, metadata) in enumerate(zip(batch_ids, embeddings, batch_metadata)):
+                    metadata_with_text = metadata.copy()
+                    metadata_with_text['text'] = batch_texts[idx]
+                    vectors.append((doc_id, embedding, metadata_with_text))
 
-            # Upsert to Pinecone
-            logger.info(f"  [Batch {batch_num}/{total_batches}] Uploading to Pinecone...")
-            self.index.upsert(vectors=vectors)
-            logger.info(f"  [Batch {batch_num}/{total_batches}] ✓ Upload complete")
+                # Upsert to Pinecone with retry logic
+                logger.info(f"  [Batch {batch_num}/{total_batches}] Uploading to Pinecone...")
+                max_retries = 3
+                for retry in range(max_retries):
+                    try:
+                        self.index.upsert(vectors=vectors)
+                        logger.info(f"  [Batch {batch_num}/{total_batches}] ✓ Upload complete")
+                        break
+                    except Exception as upsert_error:
+                        if retry < max_retries - 1:
+                            wait_time = 2 ** retry  # Exponential backoff: 1s, 2s, 4s
+                            logger.warning(f"  [Batch {batch_num}/{total_batches}] Upload failed (attempt {retry + 1}/{max_retries}): {upsert_error}")
+                            logger.info(f"  Retrying in {wait_time}s...")
+                            time.sleep(wait_time)
+                        else:
+                            logger.error(f"  [Batch {batch_num}/{total_batches}] ❌ Upload failed after {max_retries} attempts: {upsert_error}")
+                            raise  # Re-raise after exhausting retries
+
+            except Exception as e:
+                logger.error(f"  [Batch {batch_num}/{total_batches}] ❌ Critical error processing batch: {e}")
+                logger.error(f"  Error type: {type(e).__name__}")
+                raise  # Re-raise to be handled by caller
 
         logger.info(f"✓ Successfully upserted {len(all_texts)} chunks{repo_label}")
 
