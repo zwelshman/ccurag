@@ -212,8 +212,23 @@ class GitHubIndexer:
             org = self.github.get_organization(self.org_name)
             repos = org.get_repos()
 
+            # Check if test mode is enabled
+            use_test_repos = Config.USE_TEST_REPOS
+            test_repos_filter = set(Config.TEST_REPOS) if use_test_repos else None
+
+            if use_test_repos:
+                if not test_repos_filter:
+                    logger.warning("USE_TEST_REPOS is enabled but TEST_REPOS list is empty. No repos will be indexed.")
+                else:
+                    logger.info(f"Test mode enabled. Will filter for repos: {', '.join(test_repos_filter)}")
+
             repo_list = []
             for repo in repos:
+                # Filter by test repos if enabled
+                if use_test_repos:
+                    if test_repos_filter and repo.name not in test_repos_filter:
+                        continue  # Skip repos not in test list
+
                 # Get the latest commit SHA from the default branch
                 commit_sha = None
                 try:
@@ -238,8 +253,8 @@ class GitHubIndexer:
 
             logger.info(f"Total repositories found: {len(repo_list)}")
 
-            # Sample repositories if requested
-            if sample_size is not None and sample_size < len(repo_list):
+            # Sample repositories if requested (and not in test mode)
+            if sample_size is not None and sample_size < len(repo_list) and not use_test_repos:
                 original_count = len(repo_list)
                 repo_list = random.sample(repo_list, sample_size)
                 logger.info(f"Sampled {sample_size} repositories from {original_count} total")

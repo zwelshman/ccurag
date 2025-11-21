@@ -175,6 +175,40 @@ You can customize the application by modifying `config.py`:
 - `MAX_FILES_PER_REPO`: Limit files indexed per repository
 - `INDEXED_FILE_EXTENSIONS`: Add or remove file types to index
 
+### Test Mode for Development
+
+For quick testing and development, you can use a smaller subset of repositories instead of indexing all 100+ repos:
+
+**Option 1: Test Mode (Specific Repos)**
+1. Edit `config.py` and add specific repository names to the `TEST_REPOS` list:
+   ```python
+   TEST_REPOS = [
+       "repo-name-1",
+       "repo-name-2",
+       "repo-name-3"
+   ]
+   ```
+2. Enable test mode in your `.env` file:
+   ```env
+   USE_TEST_REPOS=true
+   ```
+3. Run indexing normally - only the repos in `TEST_REPOS` will be indexed
+
+**Option 2: Random Sampling**
+Set `SAMPLE_REPOS` in `config.py` to randomly sample N repositories:
+```python
+SAMPLE_REPOS = 20  # Index 20 random repos
+```
+
+**Option 3: UI Sampling**
+When using the Streamlit UI Setup page, check the "Sample 20 repos" checkbox for quick testing.
+
+**Benefits of Test Mode:**
+- ⚡ Much faster indexing (seconds instead of minutes)
+- 🧪 Predictable test data (same repos every time)
+- 💰 Lower API usage during development
+- 🐛 Easier debugging and iteration
+
 ## Project Structure
 
 ```
