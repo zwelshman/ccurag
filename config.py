@@ -77,6 +77,9 @@ class Config:
     # Repository sampling (set to None to index all repos)
     SAMPLE_REPOS = None  # Set to a number (e.g., 20) to sample random repos
 
+    # Parallel processing settings
+    MAX_PARALLEL_WORKERS = int(get_secret("MAX_PARALLEL_WORKERS", "5"))  # Number of concurrent repo processing threads
+
     # Test repository subset (for quick testing and development)
     # Set USE_TEST_REPOS=true in .env to enable test mode
     USE_TEST_REPOS = str(get_secret("USE_TEST_REPOS", "false")).lower() in ["true", "1", "yes"]
