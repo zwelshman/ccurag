@@ -55,7 +55,7 @@ Answer: Let me help you with that based on the BHFDSC repositories."""
         try:
             message = self.client.messages.create(
                 model=Config.ANTHROPIC_MODEL,
-                max_tokens=2048,
+                max_tokens=20000,
                 temperature=0.0,
                 system=self.system_prompt,
                 messages=[
