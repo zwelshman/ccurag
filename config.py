@@ -51,7 +51,7 @@ class Config:
     PINECONE_DIMENSION = 768
 
     # Model Settings
-    ANTHROPIC_MODEL = "claude-opus-4-1"
+    ANTHROPIC_MODEL = "claude-sonnet-4-5"
     EMBEDDING_MODEL = "BAAI/llm-embedder" 
 
     # Document Processing
