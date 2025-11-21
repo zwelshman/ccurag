@@ -39,52 +39,30 @@ class Config:
     # API Keys
     ANTHROPIC_API_KEY = get_secret("ANTHROPIC_API_KEY")
     GITHUB_TOKEN = get_secret("GITHUB_TOKEN")
+    PINECONE_API_KEY = get_secret("PINECONE_API_KEY")
 
-    # GitHub Organization
+    # GitHub Settings
     GITHUB_ORG = get_secret("GITHUB_ORG", "BHFDSC")
 
-    # Vector Store Settings
-    VECTOR_STORE_BACKEND = get_secret("VECTOR_STORE_BACKEND", "pinecone")  # "pinecone" or "chroma"
-
-    # ChromaDB Settings (legacy)
-    CHROMA_DB_DIR = "chroma_db"
-    COLLECTION_NAME = "bhfdsc_repos"
-
     # Pinecone Settings
-    PINECONE_API_KEY = get_secret("PINECONE_API_KEY")
     PINECONE_INDEX_NAME = get_secret("PINECONE_INDEX_NAME", "ccuindex")
     PINECONE_CLOUD = get_secret("PINECONE_CLOUD", "aws")
     PINECONE_REGION = get_secret("PINECONE_REGION", "us-east-1")
-    PINECONE_DIMENSION = int(get_secret("PINECONE_DIMENSION", "384"))
+    PINECONE_DIMENSION = 384
 
     # Model Settings
     ANTHROPIC_MODEL = "claude-opus-4-1"
-    EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # 384 dimensions
+    EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
-    # Chunking Settings
+    # Document Processing
     CHUNK_SIZE = 1000
     CHUNK_OVERLAP = 200
+    MAX_FILES_PER_REPO = 50
 
     # File types to index
     INDEXED_FILE_EXTENSIONS = [
         ".md", ".py", ".r", ".R", ".ipynb",
         ".txt", ".rst", ".html", ".yaml", ".yml", ".json"
-    ]
-
-    # Max files per repo (to avoid rate limiting)
-    MAX_FILES_PER_REPO = 50
-
-    # Repository sampling (set to None to index all repos)
-    SAMPLE_REPOS = None  # Set to a number (e.g., 20) to sample random repos
-
-    # Parallel processing settings
-    MAX_PARALLEL_WORKERS = int(get_secret("MAX_PARALLEL_WORKERS", "5"))  # Number of concurrent repo processing threads
-
-    # Test repository subset (for quick testing and development)
-    # Set USE_TEST_REPOS=true in .env to enable test mode
-    USE_TEST_REPOS = str(get_secret("USE_TEST_REPOS", "false")).lower() in ["true", "1", "yes"]
-    TEST_REPOS = [
-        "hds_curated_assets","documentation"
     ]
 
     @classmethod
@@ -93,15 +71,11 @@ class Config:
         if not cls.ANTHROPIC_API_KEY:
             raise ValueError(
                 "ANTHROPIC_API_KEY is required. "
-                "Set it in .env file (local) or Streamlit secrets (cloud)."
+                "Set it in .env file or Streamlit secrets."
             )
-
-        # Validate vector store configuration
-        if cls.VECTOR_STORE_BACKEND == "pinecone":
-            if not cls.PINECONE_API_KEY:
-                raise ValueError(
-                    "PINECONE_API_KEY is required when using Pinecone backend. "
-                    "Set it in .env file (local) or Streamlit secrets (cloud)."
-                )
-
+        if not cls.PINECONE_API_KEY:
+            raise ValueError(
+                "PINECONE_API_KEY is required. "
+                "Set it in .env file or Streamlit secrets."
+            )
         return True
