@@ -48,11 +48,11 @@ class Config:
     PINECONE_INDEX_NAME = get_secret("PINECONE_INDEX_NAME", "ccuindex")
     PINECONE_CLOUD = get_secret("PINECONE_CLOUD", "aws")
     PINECONE_REGION = get_secret("PINECONE_REGION", "us-east-1")
-    PINECONE_DIMENSION = 384
+    PINECONE_DIMENSION = 768
 
     # Model Settings
     ANTHROPIC_MODEL = "claude-opus-4-1"
-    EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+    EMBEDDING_MODEL = "BAAI/llm-embedder" 
 
     # Document Processing
     CHUNK_SIZE = 512
