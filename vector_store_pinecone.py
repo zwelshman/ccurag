@@ -3,6 +3,7 @@
 import logging
 import time
 from typing import List, Dict
+import torch
 from sentence_transformers import SentenceTransformer
 from pinecone import Pinecone, ServerlessSpec
 from config import Config
@@ -29,8 +30,10 @@ class PineconeVectorStore:
         self.cloud = Config.PINECONE_CLOUD
         self.region = Config.PINECONE_REGION
 
-        # Initialize embedding model
-        self.embedding_model = SentenceTransformer(Config.EMBEDDING_MODEL)
+        # Initialize embedding model with explicit device to avoid meta tensor issues
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        logger.info(f"Loading SentenceTransformer on device: {device}")
+        self.embedding_model = SentenceTransformer(Config.EMBEDDING_MODEL, device=device)
 
         # Initialize Pinecone client
         self.pc = Pinecone(api_key=self.api_key)

@@ -4,5 +4,6 @@ chromadb==0.4.15
 pinecone[grpc]>=3.0.0
 PyGithub>=2.1.0
 python-dotenv>=1.0.0
+torch>=2.0.0
 sentence-transformers>=2.2.0
 pydantic>=1.10.0,<2.0.0
