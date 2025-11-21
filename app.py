@@ -111,7 +111,7 @@ def run_indexing(sample_size=None):
         status_text.caption("💾 Progress is automatically saved - you can safely interrupt and resume later")
 
         # Use the checkpoint-enabled indexing method
-        all_documents = indexer.index_all_repos(sample_size=sample_size, resume=True)
+        all_documents, changed_repos = indexer.index_all_repos(sample_size=sample_size, resume=True)
 
         # Update progress bar to completion of phase 2
         progress_bar.progress(50, text="Repository indexing complete")
