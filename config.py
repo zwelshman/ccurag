@@ -19,8 +19,13 @@ def get_secret(key: str, default=None):
     # First try Streamlit secrets (for Streamlit Cloud deployment)
     if HAS_STREAMLIT:
         try:
-            return st.secrets.get(key, os.getenv(key, default))
-        except (AttributeError, FileNotFoundError):
+            # Check if key exists in secrets
+            if key in st.secrets:
+                value = st.secrets[key]
+                # Return the secret value if it's not None
+                if value is not None:
+                    return value
+        except (AttributeError, FileNotFoundError, KeyError):
             # Streamlit secrets not available, fall back to environment
             pass
 
