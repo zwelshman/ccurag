@@ -204,16 +204,18 @@ class HybridRetriever:
             return (0.3, 0.7)
 
     def similarity_search(self, query: str, k: int = 20,
-                         use_adaptive_weights: bool = None) -> List[Document]:
+                         use_adaptive_weights: bool = None,
+                         return_metadata: bool = False) -> List[Document]:
         """Perform hybrid search combining BM25 and vector similarity.
 
         Args:
             query: Query text
             k: Number of results to return
             use_adaptive_weights: Override config to enable/disable adaptive weights
+            return_metadata: If True, attach search metadata to documents
 
         Returns:
-            List of top-k Document objects
+            List of top-k Document objects (with optional search_metadata)
         """
         if self.bm25 is None:
             logger.warning("BM25 index not built, falling back to vector search only")
@@ -310,12 +312,29 @@ class HybridRetriever:
 
         # Log scoring details for debugging
         logger.info(f"Hybrid search returned {len(sorted_results)} results")
+        logger.info(f"Used weights: BM25={bm25_w:.2f}, Vector={vector_w:.2f}")
         for i, result in enumerate(sorted_results[:3]):  # Log top 3
             logger.debug(f"  Result {i+1}: combined={result['score']:.3f}, "
                         f"bm25={result['bm25_score']:.3f}, "
                         f"vector={result['vector_score']:.3f}")
 
-        return [r['doc'] for r in sorted_results]
+        # Attach search metadata if requested
+        results = []
+        for r in sorted_results:
+            doc = r['doc']
+            if return_metadata:
+                # Store metadata as document attribute
+                doc.search_metadata = {
+                    'bm25_weight_used': bm25_w,
+                    'vector_weight_used': vector_w,
+                    'bm25_score': r['bm25_score'],
+                    'vector_score': r['vector_score'],
+                    'combined_score': r['score'],
+                    'adaptive_weights_used': use_adaptive_weights or (use_adaptive_weights is None and Config.USE_ADAPTIVE_WEIGHTS)
+                }
+            results.append(doc)
+
+        return results
 
     def get_index_stats(self) -> Dict:
         """Get statistics about the hybrid index.
