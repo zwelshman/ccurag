@@ -43,6 +43,12 @@ def check_metadata_exists():
     return os.path.exists(cache_file)
 
 
+def check_bm25_index_exists():
+    """Check if BM25 hybrid index exists."""
+    bm25_cache_file = os.path.join(".cache", "bm25_index.pkl")
+    return os.path.exists(bm25_cache_file)
+
+
 @st.cache_resource
 def load_code_analyzer():
     """Load the code analyzer (cached)."""
@@ -72,7 +78,29 @@ def load_qa_system():
         vector_store = get_vector_store()
         vector_store.load_vectorstore()
 
-        qa_system = QASystem(vector_store)
+        # Use hybrid retriever if enabled and BM25 index exists
+        retriever = None
+        if Config.USE_HYBRID_SEARCH:
+            if check_bm25_index_exists():
+                logger.info("Loading hybrid retriever with BM25...")
+                try:
+                    hybrid_retriever = HybridRetriever(vector_store)
+                    # Load BM25 index from cache
+                    hybrid_retriever.build_bm25_index([], force_rebuild=False)
+                    retriever = hybrid_retriever
+                    logger.info("✓ Hybrid retriever loaded successfully")
+                except Exception as e:
+                    logger.warning(f"Failed to load hybrid retriever, using vector-only: {e}")
+                    retriever = vector_store
+            else:
+                logger.warning("Hybrid search enabled but BM25 index not found. Using vector-only search.")
+                logger.warning("Build the BM25 index in Setup page to enable hybrid search.")
+                retriever = vector_store
+        else:
+            logger.info("Hybrid search disabled, using vector-only search")
+            retriever = vector_store
+
+        qa_system = QASystem(vector_store, retriever=retriever)
         return qa_system
 
     except Exception as e:
@@ -251,6 +279,86 @@ def render_admin_page():
 
     st.divider()
 
+    # BM25 Hybrid Index Section
+    st.subheader("🔍 Hybrid Search (BM25 + Vector)")
+
+    st.info(
+        """
+        **Hybrid search combines BM25 keyword matching with vector semantic search for better results.**
+
+        - BM25 excels at exact term matching (function names, identifiers)
+        - Vector search understands meaning and context
+        - Hybrid combines both for optimal retrieval
+        """
+    )
+
+    bm25_exists = check_bm25_index_exists()
+
+    col_bm25_1, col_bm25_2 = st.columns(2)
+
+    with col_bm25_1:
+        if Config.USE_HYBRID_SEARCH:
+            if bm25_exists:
+                st.success("✅ Hybrid search is active")
+                st.metric("BM25 Weight", f"{Config.BM25_WEIGHT:.0%}")
+                st.metric("Vector Weight", f"{1-Config.BM25_WEIGHT:.0%}")
+                st.metric("Adaptive Weights", "Enabled" if Config.USE_ADAPTIVE_WEIGHTS else "Disabled")
+            else:
+                st.warning("⚠️ Hybrid search enabled but BM25 index not built")
+                st.info("Build the BM25 index to enable hybrid search.")
+        else:
+            st.info("ℹ️ Hybrid search is disabled")
+            st.caption("Using vector-only search")
+
+    with col_bm25_2:
+        if not db_exists:
+            st.warning("⚠️ Vector store must be indexed first")
+        else:
+            if st.button("🔍 Build BM25 Index", type="primary" if not bm25_exists else "secondary", use_container_width=True):
+                with st.spinner("Building BM25 index... This may take a few minutes."):
+                    try:
+                        from build_hybrid_index import main as build_hybrid_main
+
+                        # Create progress indicators
+                        progress_placeholder = st.empty()
+                        status_placeholder = st.empty()
+
+                        # Redirect stdout to capture progress
+                        import sys
+                        from io import StringIO
+
+                        old_stdout = sys.stdout
+                        sys.stdout = StringIO()
+
+                        try:
+                            build_hybrid_main(force_rebuild=True)
+                            output = sys.stdout.getvalue()
+                        finally:
+                            sys.stdout = old_stdout
+
+                        st.success("✅ BM25 index built successfully!")
+                        st.cache_resource.clear()  # Clear cache to reload with hybrid retriever
+
+                        with st.expander("📋 Build Log"):
+                            st.text(output)
+
+                    except Exception as e:
+                        st.error(f"Error building BM25 index: {e}")
+                        logger.error(f"Error building BM25 index: {e}", exc_info=True)
+
+            if bm25_exists:
+                if st.button("🗑️ Clear BM25 Cache", type="secondary", use_container_width=True):
+                    try:
+                        retriever = HybridRetriever(get_vector_store())
+                        retriever.clear_cache()
+                        st.success("BM25 cache cleared.")
+                        st.cache_resource.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error clearing BM25 cache: {e}")
+
+    st.divider()
+
     # Code Metadata Section
     st.subheader("🧠 Code Intelligence Metadata")
 
@@ -365,6 +473,31 @@ def render_qa_page():
             """
         )
 
+        st.divider()
+
+        # Retrieval method indicator
+        st.header("Retrieval Method")
+        bm25_exists = check_bm25_index_exists()
+
+        if Config.USE_HYBRID_SEARCH and bm25_exists:
+            st.success("🔍 **Hybrid Search Active**")
+            st.caption("Using BM25 + Vector search")
+            with st.expander("ℹ️ Details"):
+                st.write(f"**BM25 Weight:** {Config.BM25_WEIGHT:.0%}")
+                st.write(f"**Vector Weight:** {1-Config.BM25_WEIGHT:.0%}")
+                if Config.USE_ADAPTIVE_WEIGHTS:
+                    st.write("**Adaptive weights:** Enabled")
+                    st.caption("Weights adjust based on query type")
+        elif Config.USE_HYBRID_SEARCH and not bm25_exists:
+            st.warning("⚠️ **Vector Search Only**")
+            st.caption("BM25 index not built")
+            st.info("Go to Setup → Build BM25 Index to enable hybrid search")
+        else:
+            st.info("ℹ️ **Vector Search Only**")
+            st.caption("Hybrid search disabled")
+
+        st.divider()
+
         st.header("Settings")
         k_docs = st.slider(
             "Number of source documents",
@@ -430,6 +563,21 @@ def render_qa_page():
                         st.markdown(f"**{i}. [{metadata.get('source', 'Unknown')}]({metadata.get('url', '')})**")
                         if metadata.get("repo"):
                             st.caption(f"Repository: {metadata['repo']}")
+
+                        # Show search metadata if available (from hybrid search)
+                        if 'search_metadata' in source:
+                            sm = source['search_metadata']
+                            cols = st.columns(3)
+                            with cols[0]:
+                                st.metric("BM25 Score", f"{sm.get('bm25_score', 0):.3f}")
+                            with cols[1]:
+                                st.metric("Vector Score", f"{sm.get('vector_score', 0):.3f}")
+                            with cols[2]:
+                                st.metric("Combined", f"{sm.get('combined_score', 0):.3f}")
+
+                            if i == 1 and sm.get('adaptive_weights_used'):
+                                st.caption(f"⚙️ Adaptive weights: BM25={sm.get('bm25_weight_used', 0):.0%}, Vector={sm.get('vector_weight_used', 0):.0%}")
+
                         st.text(source.get('content_preview', source.get('full_content', '')))
                         st.divider()
 
@@ -462,6 +610,21 @@ def render_qa_page():
                                 st.markdown(f"**{i}. [{metadata.get('source', 'Unknown')}]({metadata.get('url', '')})**")
                                 if metadata.get("repo"):
                                     st.caption(f"Repository: {metadata['repo']}")
+
+                                # Show search metadata if available (from hybrid search)
+                                if 'search_metadata' in source:
+                                    sm = source['search_metadata']
+                                    cols = st.columns(3)
+                                    with cols[0]:
+                                        st.metric("BM25 Score", f"{sm.get('bm25_score', 0):.3f}")
+                                    with cols[1]:
+                                        st.metric("Vector Score", f"{sm.get('vector_score', 0):.3f}")
+                                    with cols[2]:
+                                        st.metric("Combined", f"{sm.get('combined_score', 0):.3f}")
+
+                                    if i == 1 and sm.get('adaptive_weights_used'):
+                                        st.caption(f"⚙️ Adaptive weights: BM25={sm.get('bm25_weight_used', 0):.0%}, Vector={sm.get('vector_weight_used', 0):.0%}")
+
                                 st.text(source.get('content_preview', source.get('full_content', '')))
                                 st.divider()
 

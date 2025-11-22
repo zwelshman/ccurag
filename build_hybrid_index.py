@@ -71,8 +71,12 @@ def fetch_all_documents_from_pinecone(vector_store: PineconeVectorStore,
     return all_docs
 
 
-def build_bm25_index():
-    """Build BM25 index from existing Pinecone vector store."""
+def build_bm25_index(force_rebuild=True):
+    """Build BM25 index from existing Pinecone vector store.
+
+    Args:
+        force_rebuild: If True, rebuild even if cache exists
+    """
     logger.info("=" * 60)
     logger.info("BUILDING HYBRID INDEX (BM25 + Vector)")
     logger.info("=" * 60)
@@ -98,7 +102,7 @@ def build_bm25_index():
 
     # Build BM25 index
     logger.info("Building BM25 index...")
-    hybrid_retriever.build_bm25_index(documents, force_rebuild=True)
+    hybrid_retriever.build_bm25_index(documents, force_rebuild=force_rebuild)
 
     # Print stats
     stats = hybrid_retriever.get_index_stats()
@@ -125,6 +129,11 @@ def build_bm25_index():
         logger.info(f"     Preview: {preview}...")
 
     logger.info("\n✓ Hybrid index is ready to use!")
+
+
+def main(force_rebuild=True):
+    """Main function for calling from other modules."""
+    build_bm25_index(force_rebuild=force_rebuild)
 
 
 if __name__ == "__main__":

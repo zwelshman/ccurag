@@ -158,8 +158,13 @@ Guidelines:
         
         try:
             # Retrieve relevant documents using the configured retriever
-            docs = self.retriever.similarity_search(question, k=num_docs)
-            
+            # Check if retriever is a HybridRetriever to enable metadata
+            from hybrid_retriever import HybridRetriever
+            if isinstance(self.retriever, HybridRetriever):
+                docs = self.retriever.similarity_search(question, k=num_docs, return_metadata=True)
+            else:
+                docs = self.retriever.similarity_search(question, k=num_docs)
+
             if not docs:
                 return self._create_no_context_response(question)
             
@@ -446,19 +451,19 @@ Return only the questions, one per line, without numbering or bullets."""
 
     def _format_source_documents(self, docs: List) -> List[Dict]:
         """Format source documents for response.
-        
+
         Args:
             docs: Retrieved documents
-            
+
         Returns:
             List of formatted source document dictionaries
         """
         formatted_docs = []
-        
+
         for i, doc in enumerate(docs, 1):
             content = doc.page_content
             preview = content[:300] + "..." if len(content) > 300 else content
-            
+
             formatted_doc = {
                 "source_number": i,
                 "content_preview": preview,
@@ -471,13 +476,17 @@ Return only the questions, one per line, without numbering or bullets."""
                     "last_modified": doc.metadata.get("last_modified", "")
                 }
             }
-            
+
             # Add relevance score if available
             if hasattr(doc, "score"):
                 formatted_doc["relevance_score"] = doc.score
-            
+
+            # Add search metadata if available (from hybrid retriever)
+            if hasattr(doc, "search_metadata"):
+                formatted_doc["search_metadata"] = doc.search_metadata
+
             formatted_docs.append(formatted_doc)
-        
+
         return formatted_docs
 
     def _create_no_context_response(self, question: str) -> Dict:
