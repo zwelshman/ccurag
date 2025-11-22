@@ -1,8 +1,15 @@
 """Pinecone vector store implementation."""
 
+import os
 import logging
 import time
 from typing import List, Dict
+
+# Set environment variables BEFORE importing torch to prevent meta tensor issues
+# This tells PyTorch/Transformers to avoid using meta device during model loading
+os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')
+os.environ.setdefault('TRANSFORMERS_OFFLINE', '0')  # Ensure we can download if needed
+
 import torch
 from sentence_transformers import SentenceTransformer
 from pinecone import Pinecone, ServerlessSpec
@@ -35,8 +42,45 @@ class PineconeVectorStore:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         logger.info(f"Loading SentenceTransformer model '{Config.EMBEDDING_MODEL}' on device: {device}")
         logger.info("This may take 1-5 minutes on first run (downloading model from HuggingFace)...")
-        self.embedding_model = SentenceTransformer(Config.EMBEDDING_MODEL, device=device)
-        logger.info("✓ SentenceTransformer model loaded successfully")
+
+        # Load model with multi-fallback approach to handle meta tensor issues in PyTorch 2.0+
+        # Environment variables set at module level help prevent meta device usage
+        try:
+            # Attempt 1: Load model directly on target device
+            self.embedding_model = SentenceTransformer(
+                Config.EMBEDDING_MODEL,
+                device=device
+            )
+            logger.info(f"✓ Model loaded successfully on {device}")
+
+        except (NotImplementedError, RuntimeError) as e:
+            error_msg = str(e).lower()
+
+            if "meta tensor" in error_msg or "cannot copy out of meta" in error_msg:
+                # Attempt 2: Load on CPU first, then move to target device
+                logger.warning("Meta tensor error detected, using CPU-first loading strategy...")
+                try:
+                    self.embedding_model = SentenceTransformer(
+                        Config.EMBEDDING_MODEL,
+                        device='cpu'
+                    )
+                    # Move to target device (should work from CPU -> GPU/other)
+                    self.embedding_model = self.embedding_model.to(device)
+                    logger.info(f"✓ Model loaded on CPU and successfully moved to {device}")
+
+                except Exception as e2:
+                    # Attempt 3: Keep on CPU if move fails
+                    logger.warning(f"Could not move to {device}, keeping model on CPU: {e2}")
+                    self.embedding_model = SentenceTransformer(
+                        Config.EMBEDDING_MODEL,
+                        device='cpu'
+                    )
+                    logger.info("✓ Model loaded and running on CPU")
+            else:
+                # Re-raise if it's a different error
+                raise
+
+        logger.info("✓ SentenceTransformer model initialization complete")
 
         # Initialize Pinecone client
         logger.info("Connecting to Pinecone...")
