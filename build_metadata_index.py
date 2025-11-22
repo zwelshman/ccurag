@@ -75,10 +75,6 @@ def main(force_rebuild: bool = False):
     logger.info(f"Unique functions found: {stats['total_unique_functions']}")
     logger.info(f"Tracked HDS tables found: {stats['tracked_tables_count']}/{len(analyzer.TRACKED_TABLES)}")
 
-    logger.info("\nFile types breakdown:")
-    for file_type, count in sorted(stats['file_types'].items(), key=lambda x: -x[1]):
-        logger.info(f"  {file_type}: {count} files")
-
     logger.info("\nTracked tables with usage:")
     for table, repo_count in sorted(stats['tracked_tables_found'].items(), key=lambda x: -x[1]):
         if repo_count > 0:

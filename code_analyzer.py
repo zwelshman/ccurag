@@ -223,18 +223,32 @@ class CodeAnalyzer:
             for match in matches:
                 tables.add(match.group(1))
 
-        # Filter to only tracked tables (or tables that look like HDS assets)
+        # Pattern 4: F-string and string literal table references
+        # e.g., f'{dsa}.hds_curated_assets__demographics_2024_06_04'
+        # e.g., "database.hds_curated_assets__table_name"
+        # e.g., variable = 'schema.table_name'
+        fstring_patterns = [
+            # F-strings with database prefix: f'{var}.table_name' or f"{var}.table_name"
+            r'f["\'].*?\{[^}]+\}\.([\w]+)["\']',
+            # String literals with dots (database.table): "schema.table_name" or 'schema.table_name'
+            r'["\'][\w]+\.([\w]+)["\']',
+            # Direct table name patterns (HDS tables with __ pattern)
+            r'["\']([a-z_]+__[a-z0-9_]+)["\']',
+        ]
+
+        for pattern in fstring_patterns:
+            matches = re.finditer(pattern, content, re.IGNORECASE)
+            for match in matches:
+                tables.add(match.group(1))
+
+        # Clean up table names (remove database prefixes)
         filtered_tables = set()
         for table in tables:
             # Remove database prefixes (dars_nic_391419_j3w9t_collab.table -> table)
             table_name = table.split('.')[-1]
 
-            # Check if it's a tracked table or looks like an HDS asset
-            if table_name in self.TRACKED_TABLES:
-                filtered_tables.add(table_name)
-            elif table_name.startswith("hds_curated_assets__"):
-                filtered_tables.add(table_name)
-            elif table_name.startswith("hds_"):
+            # Skip common SQL keywords that might be picked up
+            if table_name.lower() not in ['select', 'where', 'group', 'order', 'having', 'limit']:
                 filtered_tables.add(table_name)
 
         return filtered_tables
@@ -263,10 +277,13 @@ class CodeAnalyzer:
                         full_import = f"{module}.{alias.name}" if module else alias.name
                         imports.add(full_import)
 
-                # Extract function calls (especially hds_functions)
+                # Extract function calls (skip built-ins, track module/object methods)
                 elif isinstance(node, ast.Call):
                     func_name = self._get_function_name(node.func)
-                    if func_name and "hds" in func_name.lower():
+                    # Track functions that:
+                    # 1. Have a module/object prefix (e.g., spark.table, df.groupBy)
+                    # 2. Or match specific patterns (hds_, custom functions, etc.)
+                    if func_name and ('.' in func_name or '_' in func_name or func_name[0].isupper()):
                         function_calls.add(func_name)
 
         except SyntaxError:
@@ -281,11 +298,17 @@ class CodeAnalyzer:
                 for match in matches:
                     imports.add(match.group(1))
 
-            # Look for hds function calls
-            hds_func_pattern = r'\b(hds[\w.]*)\s*\('
-            matches = re.finditer(hds_func_pattern, content, re.IGNORECASE)
-            for match in matches:
-                function_calls.add(match.group(1))
+            # Look for function calls with underscores or module prefixes
+            # This helps capture user-defined and library functions
+            func_patterns = [
+                r'\b([\w]+\.[\w.]+)\s*\(',  # module.function() or obj.method()
+                r'\b([a-z][\w]*_[\w]+)\s*\(',  # functions_with_underscores()
+            ]
+
+            for pattern in func_patterns:
+                matches = re.finditer(pattern, content)
+                for match in matches:
+                    function_calls.add(match.group(1))
 
         return imports, function_calls
 
@@ -323,18 +346,17 @@ class CodeAnalyzer:
             for match in matches:
                 imports.add(match.group(1))
 
-        # Look for hds function calls (R syntax: hds_function() or hds::function())
-        hds_func_patterns = [
-            r'\b(hds[\w._]*)\s*\(',
-            r'\bhds::([\w.]+)\s*\(',
+        # Look for function calls with underscores or namespace qualifiers (e.g., custom_func, pkg::func)
+        # This captures user-defined functions and library functions, skipping simple built-ins
+        func_patterns = [
+            r'\b([\w]+::[\w.]+)\s*\(',  # pkg::function()
+            r'\b([a-z][\w]*_[\w]+)\s*\(',  # functions_with_underscores()
         ]
 
-        for pattern in hds_func_patterns:
+        for pattern in func_patterns:
             matches = re.finditer(pattern, content, re.IGNORECASE)
             for match in matches:
                 func_name = match.group(1)
-                if "::" in pattern:
-                    func_name = f"hds::{func_name}"
                 function_calls.add(func_name)
 
         return imports, function_calls
