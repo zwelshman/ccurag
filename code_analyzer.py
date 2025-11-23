@@ -182,12 +182,13 @@ class CodeAnalyzer:
 
         # Pattern 1: SQL FROM/JOIN clauses
         # FROM table_name, FROM db.table_name, JOIN table_name
+        # Supports: table_name, `table_name`, db.table_name, `db`.`table_name`
         sql_patterns = [
-            r'\bFROM\s+[\w.]+\b',
-            r'\bJOIN\s+[\w.]+\b',
-            r'\bINTO\s+[\w.]+\b',
-            r'\bUPDATE\s+[\w.]+\b',
-            r'\bTABLE\s+[\w.]+\b',
+            r'\bFROM\s+[\w.`]+\b',
+            r'\bJOIN\s+[\w.`]+\b',
+            r'\bINTO\s+[\w.`]+\b',
+            r'\bUPDATE\s+[\w.`]+\b',
+            r'\bTABLE\s+[\w.`]+\b',
         ]
 
         for pattern in sql_patterns:
@@ -229,13 +230,17 @@ class CodeAnalyzer:
         # e.g., f'{dsa}.hds_curated_assets__demographics_2024_06_04'
         # e.g., "database.hds_curated_assets__table_name"
         # e.g., variable = 'schema.table_name'
+        # e.g., `database`.`table_name` (backticks in SQL)
         fstring_patterns = [
             # F-strings with database prefix: f'{var}.table_name' or f"{var}.table_name"
             r'f["\'].*?\{[^}]+\}\.([\w]+)["\']',
-            # String literals with dots (database.table): "schema.table_name" or 'schema.table_name'
+            # String literals with dots (database.table): "schema.table_name" or 'schema.table_name' or `schema`.`table_name`
             r'["\'][\w]+\.([\w]+)["\']',
-            # Direct table name patterns (HDS tables with __ pattern)
+            r'`[\w]+`\.`([\w]+)`',  # Backtick style: `database`.`table_name`
+            r'`[\w]+\.([\w]+)`',    # Backtick style: `database.table_name`
+            # Direct table name patterns (HDS tables with __ pattern) - support quotes, single quotes, and backticks
             r'["\']([a-z_]+__[a-z0-9_]+)["\']',
+            r'`([a-z_]+__[a-z0-9_]+)`',  # Backtick style
         ]
 
         for pattern in fstring_patterns:

@@ -188,9 +188,6 @@ def test_analyzer():
     print(f"Total files analyzed: {stats['total_files']}")
     print(f"Unique tables found: {stats['total_unique_tables']}")
     print(f"Unique functions found: {stats['total_unique_functions']}")
-    print(f"\nFile types:")
-    for file_type, count in stats['file_types'].items():
-        print(f"  {file_type}: {count} files")
 
     # Test 1: Table usage queries
     print("\n" + "="*80)
