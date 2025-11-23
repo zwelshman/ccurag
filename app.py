@@ -675,10 +675,11 @@ def render_code_intelligence_page():
     stats = analyzer.get_stats()
 
     # Tabs for different features
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📊 Dashboard",
         "📁 Table Usage",
         "⚙️ Function Usage",
+        "📦 Module Usage",
         "🔍 Similar Projects",
         "🔗 Cross-Analysis"
     ])
@@ -697,24 +698,6 @@ def render_code_intelligence_page():
             st.metric("Unique Tables", stats['total_unique_tables'])
         with col4:
             st.metric("Unique Functions", stats['total_unique_functions'])
-
-        st.divider()
-
-        # File types breakdown
-        st.subheader("File Type Distribution")
-        file_types_df = pd.DataFrame([
-            {"Type": k, "Count": v}
-            for k, v in stats['file_types'].items()
-        ]).sort_values('Count', ascending=False)
-
-        fig = px.bar(
-            file_types_df,
-            x='Type',
-            y='Count',
-            color='Type',
-            title="Files by Type"
-        )
-        st.plotly_chart(fig, use_container_width=True)
 
         st.divider()
 
@@ -881,8 +864,47 @@ def render_code_intelligence_page():
                         for file_info in func_data['all_files'][:5]:
                             st.code(f"{file_info['repo']}/{file_info['file']}", language="text")
 
-    # TAB 4: Similar Projects Finder
+    # TAB 4: Module Usage Tracker
     with tab4:
+        st.header("Module Usage Tracker")
+        st.markdown("Track which repositories import specific Python modules (e.g., hds_functions).")
+
+        # Search box
+        module_name = st.text_input(
+            "Search for module name",
+            value="hds_functions",
+            help="Enter a module name to search for (e.g., 'hds_functions', 'pandas', 'numpy')"
+        )
+
+        if module_name:
+            usage = analyzer.get_module_usage(module_name)
+
+            st.metric("Total Repositories", usage['total_repos'])
+            st.metric("Total Files", usage['total_files'])
+
+            if usage['total_repos'] == 0:
+                st.info(f"No imports of module '{module_name}' found in the codebase.")
+            else:
+                st.divider()
+
+                # Repos
+                st.subheader("Repositories")
+                for repo in usage['repos']:
+                    st.markdown(f"- `{repo}`")
+
+                st.divider()
+
+                # Files by type
+                st.subheader("Files by Type")
+                for file_type, files in usage['files_by_type'].items():
+                    with st.expander(f"{file_type}: {len(files)} files"):
+                        for file_info in files[:10]:
+                            st.code(f"{file_info['repo']}/{file_info['file']}", language="text")
+                            if 'import' in file_info:
+                                st.caption(f"Import: {file_info['import']}")
+
+    # TAB 5: Similar Projects Finder
+    with tab5:
         st.header("Similar Projects Discovery")
         st.markdown("Use semantic search to find similar algorithms and potential code duplication.")
 
@@ -934,10 +956,6 @@ def render_code_intelligence_page():
 
                         for i, project in enumerate(results, 1):
                             with st.expander(f"{i}. **{project['repo']}** — {project['relevance_score']} matching files"):
-                                # File types
-                                if project['file_types']:
-                                    st.markdown(f"**File Types:** {', '.join(project['file_types'])}")
-
                                 # Tables used
                                 if project['tables_used']:
                                     st.markdown(f"**Tables Used:** {', '.join(list(project['tables_used'])[:10])}")
@@ -959,8 +977,8 @@ def render_code_intelligence_page():
                 except Exception as e:
                     st.error(f"Error during search: {e}")
 
-    # TAB 5: Cross-Analysis
-    with tab5:
+    # TAB 6: Cross-Analysis
+    with tab6:
         st.header("Cross-Dataset Analysis")
         st.markdown("Find repositories that use multiple data sources together.")
 

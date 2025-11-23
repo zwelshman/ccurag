@@ -89,6 +89,8 @@ class CodeAnalyzer:
         self.table_to_files: Dict[str, List[Dict]] = defaultdict(list)
         self.function_to_repos: Dict[str, Set[str]] = defaultdict(set)
         self.function_to_files: Dict[str, List[Dict]] = defaultdict(list)
+        self.module_to_repos: Dict[str, Set[str]] = defaultdict(set)
+        self.module_to_files: Dict[str, List[Dict]] = defaultdict(list)
 
         # Load cached metadata if available
         self._load_cache()
@@ -249,9 +251,31 @@ class CodeAnalyzer:
 
             # Skip common SQL keywords that might be picked up
             if table_name.lower() not in ['select', 'where', 'group', 'order', 'having', 'limit']:
+                # Strip timestamped suffixes from curated table names
+                # e.g., hds_curated_assets__demographics_2024_04_25 -> hds_curated_assets__demographics
+                table_name = self._normalize_table_name(table_name)
                 filtered_tables.add(table_name)
 
         return filtered_tables
+
+    def _normalize_table_name(self, table_name: str) -> str:
+        """Normalize table names by stripping timestamped suffixes.
+
+        Handles formats like:
+        - hds_curated_assets__demographics_2024_04_25 -> hds_curated_assets__demographics
+        - hds_curated_assets__demographics_2024_09_02 -> hds_curated_assets__demographics
+
+        Args:
+            table_name: Raw table name
+
+        Returns:
+            Normalized table name without timestamp suffix
+        """
+        # Pattern: table_name_YYYY_MM_DD (date suffix at the end)
+        # Match 4 digits (year), 2 digits (month), 2 digits (day) separated by underscores
+        date_suffix_pattern = r'_\d{4}_\d{2}_\d{2}$'
+        normalized = re.sub(date_suffix_pattern, '', table_name)
+        return normalized
 
     def _parse_python_code(self, content: str) -> tuple[Set[str], Set[str]]:
         """Parse Python code to extract imports and function calls.
@@ -411,9 +435,22 @@ class CodeAnalyzer:
                     "type": code_meta.file_type
                 })
 
+            # Index module imports (extract base module name)
+            for import_path in code_meta.imports:
+                # Extract base module (e.g., "hds_functions.utils" -> "hds_functions")
+                base_module = import_path.split('.')[0]
+                self.module_to_repos[base_module].add(repo)
+                self.module_to_files[base_module].append({
+                    "repo": repo,
+                    "file": file_path,
+                    "type": code_meta.file_type,
+                    "import": import_path  # Store full import path for context
+                })
+
         logger.info(f"✓ Analyzed {len(documents)} documents")
         logger.info(f"  Found {len(self.table_to_repos)} unique tables referenced")
         logger.info(f"  Found {len(self.function_to_repos)} unique functions called")
+        logger.info(f"  Found {len(self.module_to_repos)} unique modules imported")
 
         # Save cache
         self._save_cache()
@@ -478,6 +515,32 @@ class CodeAnalyzer:
             "functions": matching_functions
         }
 
+    def get_module_usage(self, module_name: str) -> Dict[str, Any]:
+        """Get usage information for a specific module.
+
+        Args:
+            module_name: Module name (e.g., "hds_functions")
+
+        Returns:
+            Dictionary with module usage statistics
+        """
+        repos = self.module_to_repos.get(module_name, set())
+        files = self.module_to_files.get(module_name, [])
+
+        # Group by file type
+        by_type = defaultdict(list)
+        for file_info in files:
+            by_type[file_info["type"]].append(file_info)
+
+        return {
+            "module": module_name,
+            "total_repos": len(repos),
+            "repos": sorted(list(repos)),
+            "total_files": len(files),
+            "files_by_type": dict(by_type),
+            "all_files": files
+        }
+
     def find_similar_projects(self, query: str,
                              hybrid_retriever=None,
                              k: int = 10) -> List[Dict[str, Any]]:
@@ -503,7 +566,6 @@ class CodeAnalyzer:
             "repo": "",
             "matched_files": [],
             "relevance_score": 0.0,
-            "file_types": set(),
             "tables_used": set(),
             "functions_used": set()
         })
@@ -523,14 +585,12 @@ class CodeAnalyzer:
                     "snippet": doc.page_content[:200] + "..."
                 })
                 repo_matches[repo]["relevance_score"] += 1.0  # Could use actual scores
-                repo_matches[repo]["file_types"].add(code_meta.file_type)
                 repo_matches[repo]["tables_used"].update(code_meta.tables_used)
                 repo_matches[repo]["functions_used"].update(code_meta.function_calls)
 
         # Convert sets to lists for JSON serialization
         results_list = []
         for repo_data in repo_matches.values():
-            repo_data["file_types"] = list(repo_data["file_types"])
             repo_data["tables_used"] = list(repo_data["tables_used"])
             repo_data["functions_used"] = list(repo_data["functions_used"])
             results_list.append(repo_data)
@@ -545,12 +605,6 @@ class CodeAnalyzer:
         total_repos = len(self.metadata)
         total_files = sum(len(files) for files in self.metadata.values())
 
-        # Count file types
-        file_types = defaultdict(int)
-        for repo_files in self.metadata.values():
-            for code_meta in repo_files.values():
-                file_types[code_meta.file_type] += 1
-
         # Count tracked tables that were found
         tracked_tables_found = {
             table: len(self.table_to_repos[table])
@@ -561,7 +615,6 @@ class CodeAnalyzer:
         return {
             "total_repos": total_repos,
             "total_files": total_files,
-            "file_types": dict(file_types),
             "total_unique_tables": len(self.table_to_repos),
             "total_unique_functions": len(self.function_to_repos),
             "tracked_tables_found": tracked_tables_found,
@@ -598,6 +651,10 @@ class CodeAnalyzer:
                     func: list(repos) for func, repos in self.function_to_repos.items()
                 },
                 "function_to_files": dict(self.function_to_files),
+                "module_to_repos": {
+                    module: list(repos) for module, repos in self.module_to_repos.items()
+                },
+                "module_to_files": dict(self.module_to_files),
             }
 
             with open(self.metadata_cache_file, 'w') as f:
@@ -641,6 +698,10 @@ class CodeAnalyzer:
                 func: set(repos) for func, repos in data["function_to_repos"].items()
             })
             self.function_to_files = defaultdict(list, data["function_to_files"])
+            self.module_to_repos = defaultdict(set, {
+                module: set(repos) for module, repos in data.get("module_to_repos", {}).items()
+            })
+            self.module_to_files = defaultdict(list, data.get("module_to_files", {}))
 
             logger.info(f"✓ Loaded metadata for {len(self.metadata)} repos from cache")
         except Exception as e:
@@ -658,3 +719,5 @@ class CodeAnalyzer:
         self.table_to_files = defaultdict(list)
         self.function_to_repos = defaultdict(set)
         self.function_to_files = defaultdict(list)
+        self.module_to_repos = defaultdict(set)
+        self.module_to_files = defaultdict(list)
