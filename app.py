@@ -38,15 +38,17 @@ def check_vector_store_exists():
 
 
 def check_metadata_exists():
-    """Check if code metadata cache exists."""
+    """Check if code metadata cache exists in either .cache or data_index."""
     cache_file = os.path.join(".cache", "code_metadata.json")
-    return os.path.exists(cache_file)
+    data_index_file = os.path.join("data_index", "code_metadata.json")
+    return os.path.exists(cache_file) or os.path.exists(data_index_file)
 
 
 def check_bm25_index_exists():
-    """Check if BM25 hybrid index exists."""
+    """Check if BM25 hybrid index exists in either .cache or data_index."""
     bm25_cache_file = os.path.join(".cache", "bm25_index.pkl")
-    return os.path.exists(bm25_cache_file)
+    bm25_data_index_file = os.path.join("data_index", "bm25_index.pkl")
+    return os.path.exists(bm25_cache_file) or os.path.exists(bm25_data_index_file)
 
 
 @st.cache_resource
@@ -382,7 +384,8 @@ def render_qa_page():
         st.divider()
         st.caption("""
         **Storage**: BM25 index is cached locally in `.cache/bm25_index.pkl`.
-        Commit cache files to Git for sharing across deployments.
+        For committed storage, copy to `data_index/bm25_index.pkl` and commit to Git.
+        The app automatically checks both locations.
         """)
 
     st.divider()
@@ -662,7 +665,8 @@ def render_code_intelligence_page():
         st.divider()
         st.caption("""
         **Storage**: Metadata is cached locally in `.cache/code_metadata.json`.
-        Commit cache files to Git for sharing across deployments.
+        For committed storage, copy to `data_index/code_metadata.json` and commit to Git.
+        The app automatically checks both locations.
         """)
 
     st.divider()
@@ -1276,14 +1280,16 @@ def render_documentation_page():
           - Scalable (handles millions of vectors)
 
         #### Local Cache Storage
-        - `.cache/bm25_index.pkl`: BM25 index (50-100MB)
-        - `.cache/code_metadata.json`: Code intelligence data (5-20MB)
-        - **Persistence**: Cache files are committed to Git for sharing across deployments
+        - `.cache/bm25_index.pkl`: BM25 index (50-100MB) - runtime cache
+        - `.cache/code_metadata.json`: Code intelligence data (5-20MB) - runtime cache
+        - `data_index/bm25_index.pkl`: Committed BM25 index
+        - `data_index/code_metadata.json`: Committed metadata
+        - **Persistence**: Cache files can be committed to Git via `data_index/` folder
         - **How it works**:
-          1. Build indices locally or on first run
-          2. Cache files saved to `.cache/` directory
-          3. Commit cache files to Git repository
-          4. Subsequent runs load from local cache instantly
+          1. Build indices locally - saved to `.cache/`
+          2. For sharing: copy files to `data_index/` and commit to Git
+          3. App checks `data_index/` first (committed), then `.cache/` (runtime)
+          4. Subsequent runs load from available location instantly
         """)
 
     # Tab 3: Technologies

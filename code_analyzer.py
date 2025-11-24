@@ -80,7 +80,9 @@ class CodeAnalyzer:
             cache_dir: Directory to store metadata cache
         """
         self.cache_dir = cache_dir
+        self.data_index_dir = "data_index"
         self.metadata_cache_file = os.path.join(cache_dir, "code_metadata.json")
+        self.metadata_data_index_file = os.path.join(self.data_index_dir, "code_metadata.json")
 
         # Initialize cloud storage
         from config import Config
@@ -728,13 +730,22 @@ class CodeAnalyzer:
             logger.warning(f"Failed to save metadata cache: {e}")
 
     def _load_cache(self):
-        """Load metadata from cache file."""
-        if not self.storage.exists(self.metadata_cache_file):
+        """Load metadata from cache file - checks data_index first, then .cache."""
+        # Try data_index first (committed files)
+        cache_file = None
+        if self.storage.exists(self.metadata_data_index_file):
+            cache_file = self.metadata_data_index_file
+            source = "data_index"
+        elif self.storage.exists(self.metadata_cache_file):
+            cache_file = self.metadata_cache_file
+            source = "cache"
+
+        if cache_file is None:
             return
 
         try:
-            logger.info("Loading metadata from cache...")
-            data = self.storage.load_json(self.metadata_cache_file)
+            logger.info(f"Loading metadata from {source}...")
+            data = self.storage.load_json(cache_file)
 
             # Restore metadata
             self.metadata = defaultdict(dict)
@@ -765,14 +776,20 @@ class CodeAnalyzer:
             })
             self.module_to_files = defaultdict(list, data.get("module_to_files", {}))
 
-            logger.info(f"✓ Loaded metadata for {len(self.metadata)} repos from cache")
+            logger.info(f"✓ Loaded metadata for {len(self.metadata)} repos from {source}")
         except Exception as e:
             logger.warning(f"Failed to load metadata cache: {e}")
 
     def clear_cache(self):
-        """Clear the metadata cache."""
+        """Clear the metadata cache from both .cache and data_index."""
+        cleared = False
         if self.storage.exists(self.metadata_cache_file):
             self.storage.delete(self.metadata_cache_file)
+            cleared = True
+        if self.storage.exists(self.metadata_data_index_file):
+            self.storage.delete(self.metadata_data_index_file)
+            cleared = True
+        if cleared:
             logger.info("✓ Metadata cache cleared")
 
         # Reset in-memory data

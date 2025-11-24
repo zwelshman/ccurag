@@ -38,7 +38,9 @@ class HybridRetriever:
 
         # Cache configuration
         self.cache_dir = ".cache"
+        self.data_index_dir = "data_index"
         self.bm25_cache_file = os.path.join(self.cache_dir, "bm25_index.pkl")
+        self.bm25_data_index_file = os.path.join(self.data_index_dir, "bm25_index.pkl")
 
         # Initialize cloud storage
         self.storage = CloudStorage(folder_name=Config.GDRIVE_FOLDER_NAME)
@@ -93,19 +95,35 @@ class HybridRetriever:
             documents: List of Document objects to index
             force_rebuild: If True, rebuild even if cache exists
         """
-        # Try to load from cache first
-        if not force_rebuild and self.storage.exists(self.bm25_cache_file):
-            logger.info("Loading BM25 index from cache...")
-            try:
-                cache_data = self.storage.load_pickle(self.bm25_cache_file)
-                self.bm25 = cache_data['bm25']
-                self.documents = cache_data['documents']
-                self.tokenized_corpus = cache_data['tokenized_corpus']
-                self.doc_ids = cache_data['doc_ids']
-                logger.info(f"✓ Loaded BM25 index with {len(self.documents)} documents from cache")
-                return
-            except Exception as e:
-                logger.warning(f"Failed to load cache, rebuilding: {e}")
+        # Try to load from cache first - check data_index, then .cache
+        if not force_rebuild:
+            # Try data_index first (committed files)
+            if self.storage.exists(self.bm25_data_index_file):
+                logger.info("Loading BM25 index from data_index...")
+                try:
+                    cache_data = self.storage.load_pickle(self.bm25_data_index_file)
+                    self.bm25 = cache_data['bm25']
+                    self.documents = cache_data['documents']
+                    self.tokenized_corpus = cache_data['tokenized_corpus']
+                    self.doc_ids = cache_data['doc_ids']
+                    logger.info(f"✓ Loaded BM25 index with {len(self.documents)} documents from data_index")
+                    return
+                except Exception as e:
+                    logger.warning(f"Failed to load from data_index, trying .cache: {e}")
+
+            # Fallback to .cache directory
+            if self.storage.exists(self.bm25_cache_file):
+                logger.info("Loading BM25 index from cache...")
+                try:
+                    cache_data = self.storage.load_pickle(self.bm25_cache_file)
+                    self.bm25 = cache_data['bm25']
+                    self.documents = cache_data['documents']
+                    self.tokenized_corpus = cache_data['tokenized_corpus']
+                    self.doc_ids = cache_data['doc_ids']
+                    logger.info(f"✓ Loaded BM25 index with {len(self.documents)} documents from cache")
+                    return
+                except Exception as e:
+                    logger.warning(f"Failed to load cache, rebuilding: {e}")
 
         logger.info(f"Building BM25 index for {len(documents)} documents...")
 
@@ -156,9 +174,15 @@ class HybridRetriever:
             logger.warning(f"Failed to save BM25 cache: {e}")
 
     def clear_cache(self):
-        """Clear the BM25 index cache."""
+        """Clear the BM25 index cache from both .cache and data_index."""
+        cleared = False
         if self.storage.exists(self.bm25_cache_file):
             self.storage.delete(self.bm25_cache_file)
+            cleared = True
+        if self.storage.exists(self.bm25_data_index_file):
+            self.storage.delete(self.bm25_data_index_file)
+            cleared = True
+        if cleared:
             logger.info("✓ BM25 cache cleared")
 
     def _get_adaptive_weights(self, query: str) -> Tuple[float, float]:
@@ -344,6 +368,11 @@ class HybridRetriever:
         """
         vector_stats = self.vector_store.get_stats()
 
+        cache_exists = (
+            self.storage.exists(self.bm25_cache_file) or
+            self.storage.exists(self.bm25_data_index_file)
+        )
+
         return {
             'bm25_documents': len(self.documents),
             'bm25_indexed': self.bm25 is not None,
@@ -351,5 +380,5 @@ class HybridRetriever:
             'bm25_weight': self.bm25_weight,
             'vector_weight': self.vector_weight,
             'adaptive_weights_enabled': Config.USE_ADAPTIVE_WEIGHTS,
-            'cache_exists': os.path.exists(self.bm25_cache_file)
+            'cache_exists': cache_exists
         }
