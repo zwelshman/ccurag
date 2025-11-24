@@ -38,15 +38,37 @@ def check_vector_store_exists():
 
 
 def check_metadata_exists():
-    """Check if code metadata cache exists."""
+    """Check if code metadata cache exists (local or Google Drive)."""
+    from cloud_storage import CloudStorage
     cache_file = os.path.join(".cache", "code_metadata.json")
-    return os.path.exists(cache_file)
+
+    # Check local first (faster)
+    if os.path.exists(cache_file):
+        return True
+
+    # Check Google Drive
+    try:
+        storage = CloudStorage(folder_name=Config.GDRIVE_FOLDER_NAME)
+        return storage.exists(cache_file)
+    except:
+        return False
 
 
 def check_bm25_index_exists():
-    """Check if BM25 hybrid index exists."""
+    """Check if BM25 hybrid index exists (local or Google Drive)."""
+    from cloud_storage import CloudStorage
     bm25_cache_file = os.path.join(".cache", "bm25_index.pkl")
-    return os.path.exists(bm25_cache_file)
+
+    # Check local first (faster)
+    if os.path.exists(bm25_cache_file):
+        return True
+
+    # Check Google Drive
+    try:
+        storage = CloudStorage(folder_name=Config.GDRIVE_FOLDER_NAME)
+        return storage.exists(bm25_cache_file)
+    except:
+        return False
 
 
 @st.cache_resource
