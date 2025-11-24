@@ -167,15 +167,17 @@ def run_indexing():
 
 
 def render_admin_page():
-    """Render the admin/setup page."""
-    st.title("⚙️ Setup & Administration")
+    """Render the admin/setup page - simplified to only Pinecone index management."""
+    st.title("⚙️ Pinecone Vector Store Setup")
 
-    st.success(
+    st.info(
         """
-        **Using Pinecone Cloud Vector Database**
+        **Pinecone Cloud Vector Database**
 
         Your vector database is stored in Pinecone cloud and persists across app restarts.
-        You only need to index repositories once, and the data will remain available.
+        Index repositories once to enable the Q&A system.
+
+        **Note**: BM25 hybrid search and code metadata are managed within their respective tabs (Q&A and Code Intelligence).
         """
     )
 
@@ -278,172 +280,21 @@ def render_admin_page():
                     st.error(f"Error deleting vector store: {e}")
 
     st.divider()
-
-    # BM25 Hybrid Index Section
-    st.subheader("🔍 Hybrid Search (BM25 + Vector)")
-
-    st.info(
-        """
-        **Hybrid search combines BM25 keyword matching with vector semantic search for better results.**
-
-        - BM25 excels at exact term matching (function names, identifiers)
-        - Vector search understands meaning and context
-        - Hybrid combines both for optimal retrieval
-        """
-    )
-
-    bm25_exists = check_bm25_index_exists()
-
-    col_bm25_1, col_bm25_2 = st.columns(2)
-
-    with col_bm25_1:
-        if Config.USE_HYBRID_SEARCH:
-            if bm25_exists:
-                st.success("✅ Hybrid search is active")
-                st.metric("BM25 Weight", f"{Config.BM25_WEIGHT:.0%}")
-                st.metric("Vector Weight", f"{1-Config.BM25_WEIGHT:.0%}")
-                st.metric("Adaptive Weights", "Enabled" if Config.USE_ADAPTIVE_WEIGHTS else "Disabled")
-            else:
-                st.warning("⚠️ Hybrid search enabled but BM25 index not built")
-                st.info("Build the BM25 index to enable hybrid search.")
-        else:
-            st.info("ℹ️ Hybrid search is disabled")
-            st.caption("Using vector-only search")
-
-    with col_bm25_2:
-        if not db_exists:
-            st.warning("⚠️ Vector store must be indexed first")
-        else:
-            if st.button("🔍 Build BM25 Index", type="primary" if not bm25_exists else "secondary", use_container_width=True):
-                with st.spinner("Building BM25 index... This may take a few minutes."):
-                    try:
-                        from build_hybrid_index import main as build_hybrid_main
-
-                        # Create progress indicators
-                        progress_placeholder = st.empty()
-                        status_placeholder = st.empty()
-
-                        # Redirect stdout to capture progress
-                        import sys
-                        from io import StringIO
-
-                        old_stdout = sys.stdout
-                        sys.stdout = StringIO()
-
-                        try:
-                            build_hybrid_main(force_rebuild=True)
-                            output = sys.stdout.getvalue()
-                        finally:
-                            sys.stdout = old_stdout
-
-                        st.success("✅ BM25 index built successfully!")
-                        st.cache_resource.clear()  # Clear cache to reload with hybrid retriever
-
-                        with st.expander("📋 Build Log"):
-                            st.text(output)
-
-                    except Exception as e:
-                        st.error(f"Error building BM25 index: {e}")
-                        logger.error(f"Error building BM25 index: {e}", exc_info=True)
-
-            if bm25_exists:
-                if st.button("🗑️ Clear BM25 Cache", type="secondary", use_container_width=True):
-                    try:
-                        retriever = HybridRetriever(get_vector_store())
-                        retriever.clear_cache()
-                        st.success("BM25 cache cleared.")
-                        st.cache_resource.clear()
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error clearing BM25 cache: {e}")
-
-    st.divider()
-
-    # Code Metadata Section
-    st.subheader("🧠 Code Intelligence Metadata")
-
-    metadata_exists = check_metadata_exists()
-
-    col3, col4 = st.columns(2)
-
-    with col3:
-        if metadata_exists:
-            st.success("✅ Metadata index exists")
-            try:
-                analyzer = load_code_analyzer()
-                if analyzer:
-                    stats = analyzer.get_stats()
-                    st.metric("Files Analyzed", stats['total_files'])
-                    st.metric("Repos Analyzed", stats['total_repos'])
-                    st.metric("Tables Found", stats['total_unique_tables'])
-                    st.metric("Functions Found", stats['total_unique_functions'])
-            except:
-                pass
-        else:
-            st.warning("⚠️ Metadata index not found")
-            st.info("Build the metadata index to enable Code Intelligence features.")
-
-    with col4:
-        if st.button("🧠 Build Metadata Index", type="primary" if not metadata_exists else "secondary", use_container_width=True):
-            with st.spinner("Building metadata index... This may take 10-30 minutes."):
-                try:
-                    from build_metadata_index import main as build_metadata_main
-
-                    # Create progress indicators
-                    progress_placeholder = st.empty()
-                    status_placeholder = st.empty()
-
-                    # Redirect stdout to capture progress
-                    import sys
-                    from io import StringIO
-
-                    old_stdout = sys.stdout
-                    sys.stdout = StringIO()
-
-                    try:
-                        build_metadata_main(force_rebuild=True)
-                        output = sys.stdout.getvalue()
-                    finally:
-                        sys.stdout = old_stdout
-
-                    st.success("✅ Metadata index built successfully!")
-                    st.cache_resource.clear()  # Clear cache to reload analyzer
-
-                    with st.expander("📋 Build Log"):
-                        st.text(output)
-
-                except Exception as e:
-                    st.error(f"Error building metadata index: {e}")
-                    logger.error(f"Error building metadata index: {e}", exc_info=True)
-
-        if metadata_exists:
-            if st.button("🗑️ Clear Metadata Cache", type="secondary", use_container_width=True):
-                try:
-                    analyzer = CodeAnalyzer()
-                    analyzer.clear_cache()
-                    st.success("Metadata cache cleared.")
-                    st.cache_resource.clear()
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error clearing cache: {e}")
-
-    st.divider()
     st.subheader("📋 Configuration")
 
     st.code(f"""
 GitHub Organization: {Config.GITHUB_ORG}
 Anthropic Model: {Config.ANTHROPIC_MODEL}
 Vector Store: Pinecone ({Config.PINECONE_INDEX_NAME})
+Embedding Model: {Config.EMBEDDING_MODEL}
 Chunk Size: {Config.CHUNK_SIZE}
 Chunk Overlap: {Config.CHUNK_OVERLAP}
 Max Files per Repo: {Config.MAX_FILES_PER_REPO}
-Hybrid Search: {"Enabled" if Config.USE_HYBRID_SEARCH else "Disabled"}
-Adaptive Weights: {"Enabled" if Config.USE_ADAPTIVE_WEIGHTS else "Disabled"}
     """, language="text")
 
 
 def render_qa_page():
-    """Render the Q&A page."""
+    """Render the Q&A page with hybrid search management."""
     st.title("❤️ BHF Data Science Centre Repository Q&A")
     st.markdown(
         """
@@ -452,6 +303,89 @@ def render_qa_page():
         and COVID-19 impacts.
         """
     )
+
+    # Hybrid Search Management Section (Collapsible)
+    with st.expander("🔍 Hybrid Search Configuration", expanded=False):
+        st.markdown(
+            """
+            **Hybrid search combines BM25 keyword matching with vector semantic search for better results.**
+
+            - **BM25**: Excels at exact term matching (function names, identifiers)
+            - **Vector Search**: Understands meaning and context
+            - **Hybrid**: Combines both for optimal retrieval
+            """
+        )
+
+        bm25_exists = check_bm25_index_exists()
+        db_exists = check_vector_store_exists()
+
+        col_bm25_1, col_bm25_2 = st.columns(2)
+
+        with col_bm25_1:
+            st.subheader("Status")
+            if Config.USE_HYBRID_SEARCH:
+                if bm25_exists:
+                    st.success("✅ Hybrid search is active")
+                    st.metric("BM25 Weight", f"{Config.BM25_WEIGHT:.0%}")
+                    st.metric("Vector Weight", f"{1-Config.BM25_WEIGHT:.0%}")
+                    st.metric("Adaptive Weights", "Enabled" if Config.USE_ADAPTIVE_WEIGHTS else "Disabled")
+                else:
+                    st.warning("⚠️ Hybrid search enabled but BM25 index not built")
+                    st.info("Build the BM25 index below to enable hybrid search.")
+            else:
+                st.info("ℹ️ Hybrid search is disabled")
+                st.caption("Using vector-only search")
+
+        with col_bm25_2:
+            st.subheader("Actions")
+            if not db_exists:
+                st.warning("⚠️ Vector store must be indexed first")
+                st.info("Go to Setup tab to index repositories")
+            else:
+                if st.button("🔍 Build BM25 Index", type="primary" if not bm25_exists else "secondary", use_container_width=True, key="qa_build_bm25"):
+                    with st.spinner("Building BM25 index... This may take a few minutes."):
+                        try:
+                            from build_hybrid_index import main as build_hybrid_main
+                            import sys
+                            from io import StringIO
+
+                            old_stdout = sys.stdout
+                            sys.stdout = StringIO()
+
+                            try:
+                                build_hybrid_main(force_rebuild=True)
+                                output = sys.stdout.getvalue()
+                            finally:
+                                sys.stdout = old_stdout
+
+                            st.success("✅ BM25 index built successfully!")
+                            st.cache_resource.clear()
+
+                            with st.expander("📋 Build Log"):
+                                st.text(output)
+
+                        except Exception as e:
+                            st.error(f"Error building BM25 index: {e}")
+                            logger.error(f"Error building BM25 index: {e}", exc_info=True)
+
+                if bm25_exists:
+                    if st.button("🗑️ Clear BM25 Cache", type="secondary", use_container_width=True, key="qa_clear_bm25"):
+                        try:
+                            retriever = HybridRetriever(get_vector_store())
+                            retriever.clear_cache()
+                            st.success("BM25 cache cleared.")
+                            st.cache_resource.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error clearing BM25 cache: {e}")
+
+        st.divider()
+        st.caption("""
+        **Storage**: BM25 index is cached locally or in cloud storage (Google Drive/S3) for fast loading.
+        Configure cloud storage credentials in Streamlit secrets or .env file for persistence across sessions.
+        """)
+
+    st.divider()
 
     # Sidebar
     with st.sidebar:
@@ -491,7 +425,7 @@ def render_qa_page():
         elif Config.USE_HYBRID_SEARCH and not bm25_exists:
             st.warning("⚠️ **Vector Search Only**")
             st.caption("BM25 index not built")
-            st.info("Go to Setup → Build BM25 Index to enable hybrid search")
+            st.info("Build BM25 index using the configuration panel above")
         else:
             st.info("ℹ️ **Vector Search Only**")
             st.caption("Hybrid search disabled")
@@ -642,7 +576,7 @@ def render_qa_page():
 
 
 def render_code_intelligence_page():
-    """Render the Code Intelligence page."""
+    """Render the Code Intelligence page with metadata management."""
     st.title("🧠 Code Intelligence Dashboard")
     st.markdown(
         """
@@ -651,6 +585,88 @@ def render_code_intelligence_page():
         """
     )
 
+    # Code Metadata Management Section (Collapsible)
+    with st.expander("⚙️ Code Metadata Configuration", expanded=False):
+        st.markdown(
+            """
+            **Code Intelligence analyzes Python, R, and SQL files to extract structured metadata.**
+
+            - **Table Usage**: Track HDS curated assets usage across projects
+            - **Function Analysis**: Identify standardized function usage
+            - **Module Imports**: See which libraries are used where
+            - **Semantic Clustering**: Find similar algorithms and code patterns
+            """
+        )
+
+        metadata_exists = check_metadata_exists()
+
+        col_meta_1, col_meta_2 = st.columns(2)
+
+        with col_meta_1:
+            st.subheader("Status")
+            if metadata_exists:
+                st.success("✅ Metadata index exists")
+                try:
+                    analyzer = load_code_analyzer()
+                    if analyzer:
+                        stats = analyzer.get_stats()
+                        st.metric("Files Analyzed", stats['total_files'])
+                        st.metric("Repos Analyzed", stats['total_repos'])
+                        st.metric("Tables Found", stats['total_unique_tables'])
+                        st.metric("Functions Found", stats['total_unique_functions'])
+                except:
+                    pass
+            else:
+                st.warning("⚠️ Metadata index not found")
+                st.info("Build the metadata index below to enable Code Intelligence features.")
+
+        with col_meta_2:
+            st.subheader("Actions")
+            if st.button("🧠 Build Metadata Index", type="primary" if not metadata_exists else "secondary", use_container_width=True, key="ci_build_metadata"):
+                with st.spinner("Building metadata index... This may take 10-30 minutes."):
+                    try:
+                        from build_metadata_index import main as build_metadata_main
+                        import sys
+                        from io import StringIO
+
+                        old_stdout = sys.stdout
+                        sys.stdout = StringIO()
+
+                        try:
+                            build_metadata_main(force_rebuild=True)
+                            output = sys.stdout.getvalue()
+                        finally:
+                            sys.stdout = old_stdout
+
+                        st.success("✅ Metadata index built successfully!")
+                        st.cache_resource.clear()
+
+                        with st.expander("📋 Build Log"):
+                            st.text(output)
+
+                    except Exception as e:
+                        st.error(f"Error building metadata index: {e}")
+                        logger.error(f"Error building metadata index: {e}", exc_info=True)
+
+            if metadata_exists:
+                if st.button("🗑️ Clear Metadata Cache", type="secondary", use_container_width=True, key="ci_clear_metadata"):
+                    try:
+                        analyzer = CodeAnalyzer()
+                        analyzer.clear_cache()
+                        st.success("Metadata cache cleared.")
+                        st.cache_resource.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error clearing cache: {e}")
+
+        st.divider()
+        st.caption("""
+        **Storage**: Metadata is cached locally or in cloud storage (Google Drive/S3) for fast loading.
+        Configure cloud storage credentials in Streamlit secrets or .env file for persistence across sessions.
+        """)
+
+    st.divider()
+
     # Check if metadata exists
     if not check_metadata_exists():
         st.error("⚠️ Metadata index not found!")
@@ -658,7 +674,7 @@ def render_code_intelligence_page():
             """
             The code metadata hasn't been built yet.
 
-            Please go to the **Setup** page and click **Build Metadata Index** to analyze the codebase.
+            Use the **Code Metadata Configuration** panel above to build the metadata index.
             This will parse all Python, R, and SQL files to extract structured metadata.
             """
         )
@@ -668,7 +684,7 @@ def render_code_intelligence_page():
     analyzer = load_code_analyzer()
 
     if analyzer is None:
-        st.error("Failed to load code analyzer. Please rebuild the metadata index.")
+        st.error("Failed to load code analyzer. Please rebuild the metadata index using the panel above.")
         st.stop()
 
     # Get statistics
@@ -1053,6 +1069,446 @@ def render_code_intelligence_page():
                     st.info("No repositories found using all selected tables.")
 
 
+def render_documentation_page():
+    """Render the comprehensive documentation page."""
+    st.title("📚 Project Documentation")
+
+    st.markdown("""
+    This page provides a comprehensive overview of how the BHFDSC Repository Q&A System works,
+    the technologies used, and potential future enhancements.
+    """)
+
+    # Create tabs for different documentation sections
+    doc_tabs = st.tabs([
+        "🏗️ Architecture",
+        "🔧 How It Works",
+        "🛠️ Technologies",
+        "🚀 Future Enhancements"
+    ])
+
+    # Tab 1: Architecture
+    with doc_tabs[0]:
+        st.header("System Architecture")
+
+        st.markdown("""
+        ### Overview
+
+        This is a **hybrid RAG (Retrieval-Augmented Generation) system** combined with **static code analysis**
+        for organizational intelligence. It provides two complementary capabilities:
+
+        1. **Conversational Q&A**: Ask natural language questions about repositories
+        2. **Code Intelligence**: Precise queries about code structure and dependencies
+        """)
+
+        st.subheader("High-Level Architecture")
+        st.code("""
+┌─────────────────────────────────────────────────────────────────┐
+│                         User Interface                          │
+│                      (Streamlit Web App)                        │
+└────────────┬────────────────────────────────────┬───────────────┘
+             │                                    │
+             ▼                                    ▼
+    ┌────────────────┐                  ┌─────────────────┐
+    │   Q&A System   │                  │ Code Intelligence│
+    │  (RAG-based)   │                  │   (Static AST)  │
+    └────────┬───────┘                  └────────┬────────┘
+             │                                    │
+             ▼                                    ▼
+    ┌─────────────────┐                 ┌──────────────────┐
+    │ Hybrid Retriever│                 │  Code Metadata   │
+    │  BM25 + Vector  │                 │  Cache (.json)   │
+    └────────┬────────┘                 └──────────────────┘
+             │
+             ├──────────────┬─────────────┐
+             ▼              ▼             ▼
+    ┌──────────────┐  ┌─────────┐  ┌──────────────┐
+    │   BM25 Index │  │ Pinecone│  │  Anthropic   │
+    │  (keyword)   │  │ (vector)│  │Claude (LLM)  │
+    └──────────────┘  └─────────┘  └──────────────┘
+        """, language="text")
+
+        st.subheader("Data Flow")
+
+        st.markdown("""
+        #### 1. Indexing Phase (One-time setup)
+
+        ```
+        GitHub Repos → Fetch Files → Process Documents → Create Embeddings → Pinecone
+                                                              ↓
+                                                         Build BM25 Index
+                                                              ↓
+                                                         Parse Code (AST)
+                                                              ↓
+                                                       Extract Metadata
+        ```
+
+        #### 2. Q&A Query Phase (Runtime)
+
+        ```
+        User Question
+              ↓
+        Hybrid Search
+        ├─→ BM25: Keyword matching (exact terms, identifiers)
+        └─→ Vector: Semantic search (meaning, context)
+              ↓
+        Combine & Rank Results (adaptive weights)
+              ↓
+        Top-K Documents (typically 20)
+              ↓
+        Format Context + Question → Anthropic Claude API
+              ↓
+        Generated Answer + Source Citations
+        ```
+
+        #### 3. Code Intelligence Query Phase (Runtime)
+
+        ```
+        Structured Query (e.g., "Which repos use table X?")
+              ↓
+        Load Cached Metadata
+              ↓
+        Direct Lookup (no LLM needed)
+              ↓
+        Exact Results (repos, files, line numbers)
+        ```
+        """)
+
+    # Tab 2: How It Works
+    with doc_tabs[1]:
+        st.header("How The System Works")
+
+        st.subheader("1. RAG (Retrieval-Augmented Generation)")
+        st.markdown("""
+        **RAG** solves the problem of LLMs not knowing about your specific codebase by:
+
+        1. **Retrieval**: Finding relevant documents from your repositories
+        2. **Augmentation**: Adding those documents as context to the prompt
+        3. **Generation**: Having the LLM generate an answer based on that context
+
+        **Why RAG?**
+        - LLMs have a knowledge cutoff and don't know about your private repos
+        - RAG provides factual, source-cited answers from your actual code
+        - Updates are easy: re-index repositories, no need to retrain models
+        """)
+
+        st.subheader("2. Hybrid Search (BM25 + Vector)")
+        st.markdown("""
+        This system uses **hybrid retrieval** combining two search methods:
+
+        #### BM25 (Best Matching 25)
+        - **Type**: Keyword-based lexical search
+        - **Strengths**:
+          - Exact term matching (function names like `get_user_data`)
+          - Acronyms and identifiers (`HES`, `COVID_19`)
+          - Code-specific tokens
+        - **How it works**: TF-IDF scoring with document length normalization
+
+        #### Vector Semantic Search
+        - **Type**: Embedding-based similarity search
+        - **Strengths**:
+          - Understanding meaning and context
+          - Paraphrased queries ("find authentication code" → matches "login functions")
+          - Conceptual relationships
+        - **How it works**:
+          1. Convert text to 768-dimensional embeddings using `BAAI/llm-embedder`
+          2. Store embeddings in Pinecone vector database
+          3. Find most similar embeddings using cosine similarity
+
+        #### Hybrid Combination
+        ```python
+        # Adaptive weight calculation based on query type
+        if query_has_code_patterns(query):  # CamelCase, snake_case, ()
+            weights = (0.7, 0.3)  # Favor BM25
+        else:
+            weights = (0.3, 0.7)  # Favor vector search
+
+        # Combine scores
+        final_score = (bm25_weight * bm25_score) + (vector_weight * vector_score)
+        ```
+
+        **Result**: Best of both worlds! Code queries get exact matches, conceptual queries get semantic understanding.
+        """)
+
+        st.subheader("3. Code Intelligence (Static Analysis)")
+        st.markdown("""
+        Beyond LLM-based Q&A, the system provides **deterministic code analysis**:
+
+        #### What It Does
+        - **Parses** Python/R/SQL files using AST (Abstract Syntax Tree)
+        - **Extracts** structured metadata:
+          - Table references (e.g., `hds_curated_assets__demographics`)
+          - Function calls (e.g., `hds_functions.curate_data()`)
+          - Module imports (e.g., `import pandas as pd`)
+          - File classifications (curation, analysis, phenotyping)
+        - **Builds** reverse indices for fast lookup
+
+        #### Why It's Useful
+        - **Instant queries**: No LLM delay, no API costs
+        - **Exact results**: Line numbers, file paths, exact matches
+        - **Cross-referencing**: Which projects use multiple data sources?
+        - **Organizational insights**: Track standardized function usage
+
+        #### Example Queries
+        ```python
+        # Find all repos using a specific HDS table
+        usage = analyzer.get_table_usage("hds_curated_assets__deaths_single")
+        → Returns: repos, files, line numbers
+
+        # Find similar algorithms
+        projects = analyzer.find_similar_projects("smoking phenotype")
+        → Returns: repos with similar code patterns
+
+        # Track function usage
+        usage = analyzer.get_function_usage("hds_functions")
+        → Returns: which repos import/call HDS functions
+        ```
+        """)
+
+        st.subheader("4. Data Storage & Persistence")
+        st.markdown("""
+        #### Pinecone (Vector Database)
+        - **Purpose**: Store document embeddings in the cloud
+        - **Persistence**: Data remains across app restarts
+        - **Advantages**:
+          - Managed service (no infrastructure)
+          - Fast similarity search (<50ms)
+          - Scalable (handles millions of vectors)
+
+        #### Cloud Storage (Google Drive / S3)
+        - **Purpose**: Cache BM25 index and code metadata
+        - **Why needed**: Streamlit Cloud has ephemeral storage
+        - **How it works**:
+          1. Build indices locally or on first cloud run
+          2. Upload to Google Drive or S3
+          3. Subsequent runs download from cloud (10s vs 10min rebuild)
+
+        #### Local Cache (Development)
+        - `.cache/bm25_index.pkl`: BM25 index (50-100MB)
+        - `.cache/code_metadata.json`: Code intelligence data (5-20MB)
+        """)
+
+    # Tab 3: Technologies
+    with doc_tabs[2]:
+        st.header("Technologies & Tools")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("Core Technologies")
+            st.markdown("""
+            #### Anthropic Claude API
+            - **Model**: `claude-sonnet-4-5`
+            - **Purpose**: Generate natural language answers from context
+            - **Features**:
+              - 200K token context window (fits ~500 pages of code)
+              - High accuracy for technical content
+              - Strong instruction following
+
+            #### Pinecone Vector Database
+            - **Type**: Managed vector database
+            - **Index**: Serverless, auto-scaling
+            - **Dimensions**: 768 (matching embedding model)
+            - **Metric**: Cosine similarity
+            - **Region**: AWS us-east-1
+
+            #### Sentence Transformers
+            - **Model**: `BAAI/llm-embedder`
+            - **Output**: 768-dimensional dense vectors
+            - **Optimization**: Fine-tuned for retrieval tasks
+            - **Speed**: ~100 docs/second on CPU
+
+            #### BM25 (rank-bm25)
+            - **Algorithm**: Okapi BM25
+            - **Parameters**: k1=1.5, b=0.75 (default)
+            - **Tokenization**: Custom code-aware tokenizer
+              - CamelCase splitting
+              - snake_case preservation
+              - Stop word removal
+            """)
+
+        with col2:
+            st.subheader("Supporting Technologies")
+            st.markdown("""
+            #### Streamlit
+            - **Purpose**: Web interface
+            - **Features**:
+              - Reactive UI components
+              - Session state management
+              - Resource caching (`@st.cache_resource`)
+
+            #### Python Static Analysis
+            - **ast module**: Parse Python to AST
+            - **re module**: Regex for SQL table extraction
+            - **File parsing**: Python, R, SQL, Markdown
+
+            #### GitHub API (PyGithub)
+            - **Purpose**: Fetch repository contents
+            - **Rate limits**: 60/hour (unauth), 5000/hour (with token)
+            - **Indexed file types**:
+              - Documentation: `.md`, `.rst`, `.txt`
+              - Code: `.py`, `.r`, `.R`, `.sql`
+              - Data: `.csv`, `.json`, `.yaml`
+              - Notebooks: `.ipynb`
+
+            #### Cloud Storage SDKs
+            - **Google Drive**: `google-auth`, `googleapiclient`
+            - **AWS S3**: `boto3`
+            - **Purpose**: Persist caches across ephemeral instances
+            """)
+
+        st.divider()
+
+        st.subheader("Why These Choices?")
+        st.markdown("""
+        | Component | Why This Choice | Alternatives Considered |
+        |-----------|----------------|------------------------|
+        | **Claude** | Best accuracy for technical content, large context window | GPT-4, open-source LLMs |
+        | **Pinecone** | Managed, no infrastructure, excellent docs | Weaviate, Qdrant, ChromaDB |
+        | **BM25** | Fast, proven for code search, no training needed | Elasticsearch, custom scoring |
+        | **Streamlit** | Rapid prototyping, Python-native, easy deployment | Gradio, Flask, FastAPI |
+        | **llm-embedder** | Optimized for retrieval, good quality/speed balance | OpenAI embeddings, E5, BGE |
+        """)
+
+    # Tab 4: Future Enhancements
+    with doc_tabs[3]:
+        st.header("Future Enhancements")
+
+        st.markdown("""
+        Based on this proof-of-concept, here are potential improvements and extensions:
+        """)
+
+        st.subheader("🎯 Short-term Enhancements (1-3 months)")
+
+        with st.expander("1. Enhanced Code Understanding"):
+            st.markdown("""
+            - **Call graph analysis**: Map function dependencies across repos
+            - **Data flow tracking**: Trace how data moves through pipelines
+            - **Import resolution**: Understand cross-repo dependencies
+            - **Complexity metrics**: Calculate cyclomatic complexity, LOC
+            - **Dead code detection**: Find unused functions/variables
+
+            **Impact**: Deeper insights into code architecture and maintainability
+            """)
+
+        with st.expander("2. Improved Search Quality"):
+            st.markdown("""
+            - **Query expansion**: Add synonyms and related terms automatically
+            - **Re-ranking**: Use cross-encoder for final result reordering
+            - **Negative examples**: Learn from poorly ranked results
+            - **Query classification**: Route different query types to optimal retrievers
+            - **Result deduplication**: Remove near-duplicate code snippets
+
+            **Impact**: Higher accuracy, fewer irrelevant results, better user experience
+            """)
+
+        with st.expander("3. User Experience Improvements"):
+            st.markdown("""
+            - **Conversation history**: Maintain context across multiple questions
+            - **Follow-up suggestions**: Auto-generate relevant next questions
+            - **Filters**: Filter by repo, date, file type, language
+            - **Syntax highlighting**: Pretty code display in results
+            - **Direct GitHub links**: Jump to exact line in GitHub UI
+            - **Export results**: Download answers as PDF/Markdown
+
+            **Impact**: More efficient workflows, better productivity
+            """)
+
+        st.subheader("🚀 Medium-term Enhancements (3-6 months)")
+
+        with st.expander("4. Advanced Analytics"):
+            st.markdown("""
+            - **Temporal analysis**: Track how code evolves over time
+            - **Contributor insights**: Who writes what type of code?
+            - **Pattern detection**: Automatically find common patterns/anti-patterns
+            - **Impact analysis**: Predict affected repos from proposed changes
+            - **Test coverage mapping**: Link tests to source code
+
+            **Impact**: Strategic insights for technical leadership
+            """)
+
+        with st.expander("5. Automated Code Quality"):
+            st.markdown("""
+            - **Style consistency checker**: Flag deviations from org standards
+            - **Security scanning**: Detect potential vulnerabilities
+            - **Dependency audit**: Track outdated or risky dependencies
+            - **Documentation coverage**: Find undocumented code
+            - **Best practice suggestions**: Recommend improvements based on org patterns
+
+            **Impact**: Higher code quality, reduced technical debt
+            """)
+
+        with st.expander("6. Multi-modal Capabilities"):
+            st.markdown("""
+            - **Diagram understanding**: Parse architecture diagrams, flowcharts
+            - **Screenshot analysis**: Extract info from images in README files
+            - **Notebook support**: Deep analysis of Jupyter notebooks
+            - **API spec parsing**: Index OpenAPI/Swagger specs
+            - **Database schema visualization**: Auto-generate ERDs
+
+            **Impact**: Handle more diverse documentation formats
+            """)
+
+        st.subheader("🌟 Long-term Vision (6-12 months)")
+
+        with st.expander("7. AI-Powered Code Generation"):
+            st.markdown("""
+            - **Template generation**: Create boilerplate based on org patterns
+            - **Code completion**: Suggest context-aware code snippets
+            - **Refactoring suggestions**: Propose improvements with diffs
+            - **Test generation**: Auto-create tests for uncovered code
+            - **Documentation generation**: Auto-write docstrings, READMEs
+
+            **Impact**: Accelerate development, ensure consistency
+            """)
+
+        with st.expander("8. Collaborative Features"):
+            st.markdown("""
+            - **Shared annotations**: Team members add notes to code
+            - **Question history**: Searchable log of all Q&A sessions
+            - **Expert routing**: Auto-tag questions for relevant team members
+            - **Learning paths**: Curated sequences for onboarding
+            - **Code review insights**: Surface relevant context during review
+
+            **Impact**: Better knowledge sharing, faster onboarding
+            """)
+
+        with st.expander("9. Integration Ecosystem"):
+            st.markdown("""
+            - **VS Code extension**: Search codebase from IDE
+            - **Slack/Teams bot**: Answer questions in chat
+            - **GitHub Actions integration**: Auto-update indices on push
+            - **JIRA/Linear integration**: Link tickets to related code
+            - **CI/CD integration**: Validate changes against org patterns
+            - **API endpoints**: Programmatic access to all features
+
+            **Impact**: Seamless workflow integration
+            """)
+
+        with st.expander("10. Advanced RAG Techniques"):
+            st.markdown("""
+            - **Hierarchical retrieval**: Coarse-to-fine document selection
+            - **Multi-hop reasoning**: Chain multiple lookups for complex questions
+            - **Agentic workflows**: LLM decides which tools to use
+            - **Active learning**: Learn from user feedback to improve ranking
+            - **Personalization**: Adapt to individual user preferences
+
+            **Impact**: Handle more complex queries, better accuracy
+            """)
+
+        st.divider()
+
+        st.subheader("📊 Success Metrics")
+        st.markdown("""
+        To evaluate these enhancements, track:
+
+        - **User Engagement**: Daily active users, questions per session
+        - **Answer Quality**: Thumbs up/down ratings, citation accuracy
+        - **Time Saved**: Onboarding time, time to find info
+        - **Code Quality**: Reduction in bugs, style violations, duplicates
+        - **Adoption**: % of team using tool, % of repos indexed
+        """)
+
+
 def main():
     """Main application with page navigation."""
     # Sidebar navigation
@@ -1060,8 +1516,8 @@ def main():
         st.title("Navigation")
         page = st.radio(
             "Go to",
-            ["Q&A", "Code Intelligence", "Setup"],
-            index=0 if check_vector_store_exists() else 2,
+            ["Q&A", "Code Intelligence", "Documentation", "Setup"],
+            index=0 if check_vector_store_exists() else 3,
         )
 
     # Render the selected page
@@ -1069,6 +1525,8 @@ def main():
         render_qa_page()
     elif page == "Code Intelligence":
         render_code_intelligence_page()
+    elif page == "Documentation":
+        render_documentation_page()
     elif page == "Setup":
         render_admin_page()
 
