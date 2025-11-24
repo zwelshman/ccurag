@@ -381,8 +381,8 @@ def render_qa_page():
 
         st.divider()
         st.caption("""
-        **Storage**: BM25 index is cached locally or in cloud storage (Google Drive/S3) for fast loading.
-        Configure cloud storage credentials in Streamlit secrets or .env file for persistence across sessions.
+        **Storage**: BM25 index is cached locally in `.cache/bm25_index.pkl`.
+        Commit cache files to Git for sharing across deployments.
         """)
 
     st.divider()
@@ -661,8 +661,8 @@ def render_code_intelligence_page():
 
         st.divider()
         st.caption("""
-        **Storage**: Metadata is cached locally or in cloud storage (Google Drive/S3) for fast loading.
-        Configure cloud storage credentials in Streamlit secrets or .env file for persistence across sessions.
+        **Storage**: Metadata is cached locally in `.cache/code_metadata.json`.
+        Commit cache files to Git for sharing across deployments.
         """)
 
     st.divider()
@@ -1275,17 +1275,15 @@ def render_documentation_page():
           - Fast similarity search (<50ms)
           - Scalable (handles millions of vectors)
 
-        #### Cloud Storage (Google Drive / S3)
-        - **Purpose**: Cache BM25 index and code metadata
-        - **Why needed**: Streamlit Cloud has ephemeral storage
-        - **How it works**:
-          1. Build indices locally or on first cloud run
-          2. Upload to Google Drive or S3
-          3. Subsequent runs download from cloud (10s vs 10min rebuild)
-
-        #### Local Cache (Development)
+        #### Local Cache Storage
         - `.cache/bm25_index.pkl`: BM25 index (50-100MB)
         - `.cache/code_metadata.json`: Code intelligence data (5-20MB)
+        - **Persistence**: Cache files are committed to Git for sharing across deployments
+        - **How it works**:
+          1. Build indices locally or on first run
+          2. Cache files saved to `.cache/` directory
+          3. Commit cache files to Git repository
+          4. Subsequent runs load from local cache instantly
         """)
 
     # Tab 3: Technologies
@@ -1351,9 +1349,9 @@ def render_documentation_page():
               - Data: `.csv`, `.json`, `.yaml`
               - Notebooks: `.ipynb`
 
-            #### Cloud Storage SDKs
-            - **Google Drive**: `google-auth`, `googleapiclient`
-            - **Purpose**: Persist caches across ephemeral instances
+            #### Git Version Control
+            - **Purpose**: Persist caches and share across deployments
+            - **Storage**: Cache files committed to Git repository
             """)
 
         st.divider()
