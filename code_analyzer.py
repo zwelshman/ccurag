@@ -85,8 +85,7 @@ class CodeAnalyzer:
         self.metadata_data_index_file = os.path.join(self.data_index_dir, "code_metadata.json")
 
         # Initialize cloud storage
-        from config import Config
-        self.storage = CloudStorage(folder_name=Config.GDRIVE_FOLDER_NAME)
+        self.storage = CloudStorage()
 
         # Metadata storage: repo -> file -> CodeMetadata
         self.metadata: Dict[str, Dict[str, CodeMetadata]] = defaultdict(dict)
