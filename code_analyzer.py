@@ -14,6 +14,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 import json
 import os
+from cloud_storage import CloudStorage
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -80,6 +81,10 @@ class CodeAnalyzer:
         """
         self.cache_dir = cache_dir
         self.metadata_cache_file = os.path.join(cache_dir, "code_metadata.json")
+
+        # Initialize cloud storage
+        from config import Config
+        self.storage = CloudStorage(folder_name=Config.S3_BUCKET_NAME)
 
         # Metadata storage: repo -> file -> CodeMetadata
         self.metadata: Dict[str, Dict[str, CodeMetadata]] = defaultdict(dict)
@@ -629,8 +634,6 @@ class CodeAnalyzer:
     def _save_cache(self):
         """Save metadata to cache file."""
         try:
-            os.makedirs(self.cache_dir, exist_ok=True)
-
             # Convert metadata to serializable format
             serializable_data = {
                 "metadata": {
@@ -662,22 +665,18 @@ class CodeAnalyzer:
                 "module_to_files": dict(self.module_to_files),
             }
 
-            with open(self.metadata_cache_file, 'w') as f:
-                json.dump(serializable_data, f, indent=2)
-
-            logger.info(f"✓ Saved metadata cache to {self.metadata_cache_file}")
+            self.storage.save_json(serializable_data, self.metadata_cache_file)
         except Exception as e:
             logger.warning(f"Failed to save metadata cache: {e}")
 
     def _load_cache(self):
         """Load metadata from cache file."""
-        if not os.path.exists(self.metadata_cache_file):
+        if not self.storage.exists(self.metadata_cache_file):
             return
 
         try:
             logger.info("Loading metadata from cache...")
-            with open(self.metadata_cache_file, 'r') as f:
-                data = json.load(f)
+            data = self.storage.load_json(self.metadata_cache_file)
 
             # Restore metadata
             self.metadata = defaultdict(dict)
@@ -714,8 +713,8 @@ class CodeAnalyzer:
 
     def clear_cache(self):
         """Clear the metadata cache."""
-        if os.path.exists(self.metadata_cache_file):
-            os.remove(self.metadata_cache_file)
+        if self.storage.exists(self.metadata_cache_file):
+            self.storage.delete(self.metadata_cache_file)
             logger.info("✓ Metadata cache cleared")
 
         # Reset in-memory data

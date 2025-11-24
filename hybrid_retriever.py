@@ -9,6 +9,7 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 from vector_store_pinecone import PineconeVectorStore, Document
 from config import Config
+from cloud_storage import CloudStorage
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,9 +36,12 @@ class HybridRetriever:
         self.tokenized_corpus: List[List[str]] = []
         self.doc_ids: List[str] = []
 
-        # Cache file for BM25 index
+        # Cache configuration
         self.cache_dir = ".cache"
         self.bm25_cache_file = os.path.join(self.cache_dir, "bm25_index.pkl")
+
+        # Initialize cloud storage
+        self.storage = CloudStorage(bucket_name=Config.S3_BUCKET_NAME)
 
         logger.info(f"Initialized HybridRetriever with BM25 weight: {self.bm25_weight:.2f}, "
                    f"Vector weight: {self.vector_weight:.2f}")
@@ -90,15 +94,14 @@ class HybridRetriever:
             force_rebuild: If True, rebuild even if cache exists
         """
         # Try to load from cache first
-        if not force_rebuild and os.path.exists(self.bm25_cache_file):
+        if not force_rebuild and self.storage.exists(self.bm25_cache_file):
             logger.info("Loading BM25 index from cache...")
             try:
-                with open(self.bm25_cache_file, 'rb') as f:
-                    cache_data = pickle.load(f)
-                    self.bm25 = cache_data['bm25']
-                    self.documents = cache_data['documents']
-                    self.tokenized_corpus = cache_data['tokenized_corpus']
-                    self.doc_ids = cache_data['doc_ids']
+                cache_data = self.storage.load_pickle(self.bm25_cache_file)
+                self.bm25 = cache_data['bm25']
+                self.documents = cache_data['documents']
+                self.tokenized_corpus = cache_data['tokenized_corpus']
+                self.doc_ids = cache_data['doc_ids']
                 logger.info(f"✓ Loaded BM25 index with {len(self.documents)} documents from cache")
                 return
             except Exception as e:
@@ -142,23 +145,20 @@ class HybridRetriever:
     def _save_cache(self):
         """Save BM25 index to cache file."""
         try:
-            os.makedirs(self.cache_dir, exist_ok=True)
             cache_data = {
                 'bm25': self.bm25,
                 'documents': self.documents,
                 'tokenized_corpus': self.tokenized_corpus,
                 'doc_ids': self.doc_ids
             }
-            with open(self.bm25_cache_file, 'wb') as f:
-                pickle.dump(cache_data, f)
-            logger.info(f"✓ Saved BM25 index cache to {self.bm25_cache_file}")
+            self.storage.save_pickle(cache_data, self.bm25_cache_file)
         except Exception as e:
             logger.warning(f"Failed to save BM25 cache: {e}")
 
     def clear_cache(self):
         """Clear the BM25 index cache."""
-        if os.path.exists(self.bm25_cache_file):
-            os.remove(self.bm25_cache_file)
+        if self.storage.exists(self.bm25_cache_file):
+            self.storage.delete(self.bm25_cache_file)
             logger.info("✓ BM25 cache cleared")
 
     def _get_adaptive_weights(self, query: str) -> Tuple[float, float]:
