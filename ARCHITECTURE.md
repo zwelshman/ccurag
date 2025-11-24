@@ -22,7 +22,7 @@ This is a **hybrid RAG (Retrieval-Augmented Generation) system** combined with *
 ### Key Features
 
 - **Hybrid Search**: Combines BM25 keyword matching with vector semantic search
-- **Cloud-Native**: Pinecone vector database + cloud storage for persistence
+- **Persistent Storage**: Pinecone vector database for embeddings, Git for cache files
 - **Code-Aware**: Custom tokenization and parsing optimized for code
 - **Scalable**: Handles dozens of repositories with thousands of files
 - **Fast**: Sub-second query times with cached indices
@@ -266,29 +266,19 @@ class CodeAnalyzer:
 }
 ```
 
-### 6. Cloud Storage (`cloud_storage.py`)
+### 6. Local Storage (`cloud_storage.py`)
 
-**Purpose**: Persist BM25 index and code metadata across ephemeral Streamlit Cloud instances.
+**Purpose**: Persist BM25 index and code metadata locally.
 
 **Key Responsibilities**:
-- Auto-detect available storage backend (Google Drive or local)
 - Save/load pickle and JSON files
-- Handle authentication and credentials
-- Provide consistent API across backends
+- Provide consistent API for cache management
+- Store files in `.cache/` directory
 
-**Supported Backends**:
-1. **Google Drive** (Recommended)
-   - Free 15GB storage
-   - Service account authentication
-   - Files stored in `ccurag-cache/` folder
-
-2. **Local Storage** (Fallback)
-   - For development use
-   - Files stored in `.cache/` directory
-
-3. **Local Filesystem** (Development)
-   - `.cache/` directory
-   - No persistence across cloud restarts
+**Storage Strategy**:
+- Files stored in `.cache/` directory
+- Cache files committed to Git for sharing across deployments
+- Simple local filesystem operations
 
 ## Data Flow
 
@@ -317,13 +307,13 @@ class CodeAnalyzer:
    ├─→ Fetch all docs from Pinecone
    ├─→ Tokenize with code-aware tokenizer
    ├─→ Build BM25Okapi index
-   └─→ Cache to `.cache/bm25_index.pkl` + cloud storage
+   └─→ Cache to `.cache/bm25_index.pkl` (commit to Git)
 
 7. Build Code Metadata (Separate step)
    ├─→ Fetch all repos
    ├─→ Parse Python/R/SQL files with AST
    ├─→ Extract tables, functions, imports
-   └─→ Cache to `.cache/code_metadata.json` + cloud storage
+   └─→ Cache to `.cache/code_metadata.json` (commit to Git)
 ```
 
 ### Q&A Query Phase (Runtime)
@@ -389,8 +379,7 @@ class CodeAnalyzer:
    └─→ Example: "Show usage of hds_curated_assets__deaths_single"
 
 2. Load Cached Metadata
-   ├─→ Check local cache: `.cache/code_metadata.json`
-   ├─→ If not found, load from cloud storage
+   ├─→ Load from local cache: `.cache/code_metadata.json`
    └─→ Parse JSON into memory
 
 3. Direct Lookup
@@ -921,32 +910,23 @@ tables = extract_table_references(sql)
 - No backups needed (Pinecone handles that)
 - Re-indexing only needed when repos change
 
-### Cloud Storage (Google Drive)
+### Local Storage (Git-based)
 
-**Why Additional Storage?**
-- Streamlit Cloud has **ephemeral storage** (files lost on restart)
-- BM25 index and code metadata need persistence
-- Building from scratch takes 10-30 minutes
+**Storage Strategy**:
+- Cache files stored in `.cache/` directory
+- Committed to Git repository for sharing
+- No external storage services required
 
 **What's Stored**:
 - `.cache/bm25_index.pkl`: BM25 index (50-100MB)
 - `.cache/code_metadata.json`: Code intelligence data (5-20MB)
 
-**Google Drive Setup**:
-1. Create service account in Google Cloud
-2. Enable Drive API
-3. Download JSON credentials
-4. Add credentials to Streamlit secrets
-5. Files stored in `ccurag-cache/` folder
-
-**Automatic Fallback**:
+**Implementation**:
 ```python
 class CloudStorage:
     def __init__(self):
-        if has_gdrive_credentials():
-            self.backend = GoogleDriveStorage()
-        else:
-            self.backend = LocalStorage()
+        # Simple local storage
+        logger.info("✓ Using local storage (cache files will be saved to Git)")
 ```
 
 ### Cache Loading Strategy
@@ -955,20 +935,17 @@ class CloudStorage:
 App Startup
     ↓
 Check if cache exists locally
-    ├─→ Yes: Load from local (200ms)
-    └─→ No: Check cloud storage
-            ├─→ Found: Download and cache locally (2-5s)
-            └─→ Not found: Build from scratch (10-30min)
-                          Then upload to cloud
+    ├─→ Yes: Load from local cache (200ms)
+    └─→ No: Build from scratch (10-30min)
+            Then commit to Git
 ```
 
 **First Run** (no cache):
 - 10-30 minutes to build indices
-- Automatic upload to cloud
+- Commit cache files to Git
 
 **Subsequent Runs** (cached):
-- 2-5 seconds to download from cloud
-- Instant loading from local cache
+- Instant loading from local cache (200ms)
 
 ## Performance Considerations
 
@@ -1048,14 +1025,14 @@ with ThreadPoolExecutor(max_workers=4) as executor:
 - **Pinecone**: Serverless scales automatically
 - **BM25**: Linear search, but fast (<100ms even for 100k docs)
 - **Claude API**: Rate limits (5000 requests/day on free tier)
-- **Storage**: Google Drive free tier is 15GB (enough for 100k+ docs)
+- **Storage**: Git repository storage (cache files ~50-100MB)
 
 ### Cost Estimates
 
 **Monthly Costs (50 repos)**:
 - Pinecone: $0 (free tier)
 - Claude API: $5-20 (depends on query volume)
-- Google Drive: $0 (free tier)
+- Git storage: $0 (included with Git hosting)
 - **Total**: $5-20/month
 
 **Per-Query Costs**:
@@ -1072,7 +1049,7 @@ This architecture combines the best of multiple approaches:
 1. **RAG** for natural language understanding and flexibility
 2. **Hybrid Search** for accuracy on both code and conceptual queries
 3. **Static Analysis** for deterministic code intelligence
-4. **Cloud Storage** for persistence and scalability
+4. **Git-based Storage** for persistence and easy sharing
 
 **Result**: A production-ready system that's fast, accurate, and cost-effective for exploring code repositories.
 

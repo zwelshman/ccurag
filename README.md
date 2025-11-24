@@ -15,7 +15,6 @@ This system provides two complementary capabilities:
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)**: Comprehensive technical documentation explaining how the system works
 - **[HYBRID_SEARCH.md](HYBRID_SEARCH.md)**: Deep dive into the hybrid BM25 + vector search implementation
-- **[CLOUD_PERSISTENCE.md](CLOUD_PERSISTENCE.md)**: Guide to setting up cloud storage for persistence
 - **[FUTURE_ENHANCEMENTS.md](FUTURE_ENHANCEMENTS.md)**: Potential improvements and extensions
 
 ## ✨ Features
@@ -25,7 +24,7 @@ This system provides two complementary capabilities:
   - BM25 excels at exact term matching (function names, identifiers)
   - Vector search understands meaning and context
   - Adaptive weighting based on query type (code vs. conceptual)
-- **Persistent Cloud Storage**: Uses Pinecone vector database - data persists across sessions
+- **Persistent Storage**: Uses Pinecone vector database for embeddings - data persists across sessions. Cache files are stored in Git for easy sharing
 - **Comprehensive Indexing**: Indexes README files and code from all organization repositories
 - **Intelligent Q&A**: Uses Anthropic Claude 4.5 Sonnet with RAG to answer questions
 - **Source Attribution**: Shows which repositories and files were used to generate answers with relevance scores
@@ -111,7 +110,7 @@ Reverse Indices (table→repos, function→repos) → Fast Lookups
 - **Hybrid Retriever** (`hybrid_retriever.py`): Combines BM25 and vector search with adaptive weighting
 - **QA System** (`qa_chain.py`): Formats prompts and calls Anthropic Claude API
 - **Code Analyzer** (`code_analyzer.py`): Parses code and extracts structured metadata
-- **Cloud Storage** (`cloud_storage.py`): Persists caches to Google Drive
+- **Cloud Storage** (`cloud_storage.py`): Local cache storage - commit cache files to Git for sharing
 - **Streamlit App** (`app.py`): Web interface with Q&A, Code Intelligence, Documentation, and Setup tabs
 
 ## 🛠️ Technologies Used
@@ -529,12 +528,12 @@ The application has 4 main tabs:
    - Fetch documents from Pinecone
    - Tokenize with code-aware tokenizer
    - Build BM25Okapi index
-   - Cache to `.cache/bm25_index.pkl` + cloud storage
+   - Cache to `.cache/bm25_index.pkl` (commit to Git for sharing)
 7. **Build Code Metadata** (separate step):
    - Parse Python/R/SQL files with AST
    - Extract tables, functions, imports
    - Build reverse indices
-   - Cache to `.cache/code_metadata.json` + cloud storage
+   - Cache to `.cache/code_metadata.json` (commit to Git for sharing)
 
 ### RAG Query Phase (Runtime)
 
@@ -557,7 +556,7 @@ The application has 4 main tabs:
 ### Code Intelligence Query Phase (Runtime)
 
 1. **User Selection**: Choose structured query (e.g., "Show usage of table X")
-2. **Load Metadata**: Check local cache → load from cloud if needed → parse JSON
+2. **Load Metadata**: Load from local cache (`.cache/code_metadata.json`) → parse JSON
 3. **Direct Lookup**: O(1) hash lookup in reverse index
 4. **Format Results**: Structure data (repos, files, line numbers, counts)
 5. **Display**: Interactive UI with expandable file lists and statistics
@@ -591,7 +590,7 @@ GITHUB_TOKEN=your_github_token
 - **Streamlit**: Web application framework for UI
 - **PyGithub**: GitHub API library for fetching repositories
 - **Python AST**: Static analysis for code parsing
-- **Google Drive**: Cloud storage for cache persistence
+- **Git**: Version control for cache persistence and sharing
 
 **For detailed technical information, see [ARCHITECTURE.md](ARCHITECTURE.md).**
 
@@ -644,7 +643,6 @@ For issues or questions:
 - Open an issue on GitHub
 - Check the [ARCHITECTURE.md](ARCHITECTURE.md) for technical details
 - Review the [HYBRID_SEARCH.md](HYBRID_SEARCH.md) for search-related questions
-- See [CLOUD_PERSISTENCE.md](CLOUD_PERSISTENCE.md) for deployment help
 
 ## 🙏 Acknowledgments
 
