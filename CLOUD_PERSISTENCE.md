@@ -15,8 +15,7 @@ Without cloud persistence, these files need to be rebuilt on every app restart (
 The application now supports **cloud-based persistence** with automatic fallback:
 
 1. **Google Drive** (Recommended) - Free 15GB with Google account
-2. **AWS S3** (Alternative) - Pay-as-you-go cloud storage
-3. **Local Storage** (Fallback) - For development
+2. **Local Storage** (Fallback) - For development
 
 ## Setup Guide: Google Drive (Recommended)
 
@@ -112,8 +111,7 @@ GDRIVE_CREDENTIALS_JSON="/path/to/service-account-key.json"
 The `CloudStorage` class automatically chooses the best available backend:
 
 1. **Google Drive** - If `GDRIVE_CREDENTIALS_JSON` is set
-2. **AWS S3** - If `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are set
-3. **Local Files** - Fallback for development
+2. **Local Files** - Fallback for development
 
 ### Storage Structure
 
@@ -178,43 +176,6 @@ python build_metadata_index.py --force-rebuild
 
 This will rebuild and re-upload to cloud storage.
 
-## Alternative: AWS S3 Setup
-
-If you prefer S3 over Google Drive:
-
-### Step 1: Create S3 Bucket
-
-1. Go to [AWS S3 Console](https://s3.console.aws.amazon.com/)
-2. Create a new bucket (e.g., `ccurag-cache-yourusername`)
-3. Keep default settings (private bucket)
-
-### Step 2: Create IAM User
-
-1. Go to [AWS IAM Console](https://console.aws.amazon.com/iam/)
-2. Create user with programmatic access
-3. Attach policy: `AmazonS3FullAccess` (or create custom policy)
-4. Save **Access Key ID** and **Secret Access Key**
-
-### Step 3: Configure Secrets
-
-Add to Streamlit secrets or `.env`:
-
-```toml
-AWS_ACCESS_KEY_ID = "AKIA..."
-AWS_SECRET_ACCESS_KEY = "..."
-AWS_REGION = "us-east-1"
-S3_BUCKET_NAME = "ccurag-cache-yourusername"
-```
-
-## Cost Comparison
-
-| Storage | Free Tier | Storage Cost | Transfer Cost | Total (est.) |
-|---------|-----------|--------------|---------------|--------------|
-| **Google Drive** | 15 GB free | Free | Free | **$0/month** |
-| **AWS S3** | 5 GB, 12 months | $0.023/GB | $0.09/GB | **~$0.50-2/month** |
-
-**Recommendation**: Use Google Drive for the free tier.
-
 ## Troubleshooting
 
 ### "Failed to initialize Google Drive"
@@ -264,23 +225,22 @@ If you see local storage warnings, cloud credentials aren't configured:
 
 ```
 ⚠ Google Drive credentials not found
-⚠ S3 credentials not found, using local storage
 ```
 
 ## Security Best Practices
 
 1. **Service Account Permissions**: Only grant `drive.file` scope (not full Drive access)
 2. **Rotate Keys**: Regenerate service account keys periodically
-3. **Private Bucket**: Never make your S3 bucket or Drive folder public
+3. **Private Folder**: Never make your Drive folder public
 4. **Secrets Management**: Use Streamlit secrets, not hardcoded values
 
 ## Performance
 
-| Operation | Local | Google Drive | AWS S3 |
-|-----------|-------|--------------|--------|
-| **Cache Load (BM25)** | 200ms | 2-3s | 1-2s |
-| **Cache Load (Metadata)** | 50ms | 500ms | 300ms |
-| **Cache Save** | 100ms | 3-5s | 2-3s |
+| Operation | Local | Google Drive |
+|-----------|-------|--------------|
+| **Cache Load (BM25)** | 200ms | 2-3s |
+| **Cache Load (Metadata)** | 50ms | 500ms |
+| **Cache Save** | 100ms | 3-5s |
 
 **Note**: Slightly slower than local, but enables persistence in cloud deployments.
 

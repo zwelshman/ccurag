@@ -84,7 +84,7 @@ class CodeAnalyzer:
 
         # Initialize cloud storage
         from config import Config
-        self.storage = CloudStorage(folder_name=Config.S3_BUCKET_NAME)
+        self.storage = CloudStorage(folder_name=Config.GDRIVE_FOLDER_NAME)
 
         # Metadata storage: repo -> file -> CodeMetadata
         self.metadata: Dict[str, Dict[str, CodeMetadata]] = defaultdict(dict)

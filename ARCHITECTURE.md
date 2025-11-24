@@ -141,8 +141,6 @@ class PineconeVectorStore:
 - **Index Type**: Serverless (auto-scaling)
 - **Dimensions**: 768
 - **Metric**: Cosine similarity
-- **Region**: AWS us-east-1
-- **Cloud**: AWS
 
 ### 3. Hybrid Retriever (`hybrid_retriever.py`)
 
@@ -273,7 +271,7 @@ class CodeAnalyzer:
 **Purpose**: Persist BM25 index and code metadata across ephemeral Streamlit Cloud instances.
 
 **Key Responsibilities**:
-- Auto-detect available storage backend (Google Drive, S3, local)
+- Auto-detect available storage backend (Google Drive or local)
 - Save/load pickle and JSON files
 - Handle authentication and credentials
 - Provide consistent API across backends
@@ -284,10 +282,9 @@ class CodeAnalyzer:
    - Service account authentication
    - Files stored in `ccurag-cache/` folder
 
-2. **AWS S3** (Alternative)
-   - Pay-as-you-go pricing (~$0.50-2/month)
-   - IAM authentication
-   - Private bucket
+2. **Local Storage** (Fallback)
+   - For development use
+   - Files stored in `.cache/` directory
 
 3. **Local Filesystem** (Development)
    - `.cache/` directory
@@ -462,7 +459,7 @@ client.messages.create(
     "metric": "cosine",
     "spec": {
         "serverless": {
-            "cloud": "aws",
+            "cloud": "aws",  # Pinecone infrastructure (not our storage)
             "region": "us-east-1"
         }
     }
@@ -924,7 +921,7 @@ tables = extract_table_references(sql)
 - No backups needed (Pinecone handles that)
 - Re-indexing only needed when repos change
 
-### Cloud Storage (Google Drive / S3)
+### Cloud Storage (Google Drive)
 
 **Why Additional Storage?**
 - Streamlit Cloud has **ephemeral storage** (files lost on restart)
@@ -942,20 +939,12 @@ tables = extract_table_references(sql)
 4. Add credentials to Streamlit secrets
 5. Files stored in `ccurag-cache/` folder
 
-**AWS S3 Setup**:
-1. Create S3 bucket
-2. Create IAM user with S3 access
-3. Add access keys to Streamlit secrets
-4. Files stored in bucket root or subfolder
-
 **Automatic Fallback**:
 ```python
 class CloudStorage:
     def __init__(self):
         if has_gdrive_credentials():
             self.backend = GoogleDriveStorage()
-        elif has_s3_credentials():
-            self.backend = S3Storage()
         else:
             self.backend = LocalStorage()
 ```

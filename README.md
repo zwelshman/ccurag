@@ -111,7 +111,7 @@ Reverse Indices (table→repos, function→repos) → Fast Lookups
 - **Hybrid Retriever** (`hybrid_retriever.py`): Combines BM25 and vector search with adaptive weighting
 - **QA System** (`qa_chain.py`): Formats prompts and calls Anthropic Claude API
 - **Code Analyzer** (`code_analyzer.py`): Parses code and extracts structured metadata
-- **Cloud Storage** (`cloud_storage.py`): Persists caches to Google Drive or S3
+- **Cloud Storage** (`cloud_storage.py`): Persists caches to Google Drive
 - **Streamlit App** (`app.py`): Web interface with Q&A, Code Intelligence, Documentation, and Setup tabs
 
 ## 🛠️ Technologies Used
@@ -127,7 +127,7 @@ Reverse Indices (table→repos, function→repos) → Fast Lookups
 #### Pinecone Vector Database
 - **Type**: Managed, serverless cloud vector database
 - **Purpose**: Store and search document embeddings
-- **Configuration**: 768 dimensions, cosine similarity, AWS us-east-1
+- **Configuration**: 768 dimensions, cosine similarity
 - **Why Pinecone?**: Fully managed (no infrastructure), fast (<50ms queries), persistent storage
 
 #### Sentence Transformers (BAAI/llm-embedder)
@@ -591,7 +591,7 @@ GITHUB_TOKEN=your_github_token
 - **Streamlit**: Web application framework for UI
 - **PyGithub**: GitHub API library for fetching repositories
 - **Python AST**: Static analysis for code parsing
-- **Google Drive / AWS S3**: Cloud storage for cache persistence
+- **Google Drive**: Cloud storage for cache persistence
 
 **For detailed technical information, see [ARCHITECTURE.md](ARCHITECTURE.md).**
 

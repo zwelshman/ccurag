@@ -1,7 +1,7 @@
 """Cloud storage abstraction for persistent caching in Streamlit Cloud.
 
 This module provides a unified interface for storing cache files either locally
-(for development), in Google Drive (recommended for Streamlit Cloud), or in AWS S3.
+(for development) or in Google Drive (recommended for Streamlit Cloud).
 """
 
 import os
@@ -20,8 +20,7 @@ class CloudStorage:
 
     Priority order:
     1. Google Drive (if credentials available)
-    2. AWS S3 (if credentials available)
-    3. Local storage (fallback for development)
+    2. Local storage (fallback for development)
     """
 
     def __init__(self, folder_name: Optional[str] = None):
@@ -31,14 +30,12 @@ class CloudStorage:
             folder_name: Folder/bucket name for cloud storage
         """
         self.folder_name = folder_name or "ccurag-cache"
-        self.backend = "local"  # Options: "gdrive", "s3", "local"
+        self.backend = "local"  # Options: "gdrive", "local"
         self.service = None
 
-        # Try to initialize cloud storage (Google Drive first, then S3)
+        # Try to initialize cloud storage (Google Drive)
         if folder_name:
             self._init_gdrive()
-            if self.backend == "local":
-                self._init_s3()
 
     def _init_gdrive(self):
         """Initialize Google Drive client if credentials are available."""
@@ -130,36 +127,6 @@ class CloudStorage:
 
         return files[0]['id'] if files else None
 
-    def _init_s3(self):
-        """Initialize S3 client if credentials are available."""
-        try:
-            import boto3
-            from botocore.exceptions import NoCredentialsError, ClientError
-
-            # Import here to avoid circular dependency
-            from config import Config
-
-            # Check if S3 credentials are available
-            aws_access_key = Config.AWS_ACCESS_KEY_ID
-            aws_secret_key = Config.AWS_SECRET_ACCESS_KEY
-            aws_region = Config.AWS_REGION
-
-            if aws_access_key and aws_secret_key:
-                self.service = boto3.client(
-                    's3',
-                    aws_access_key_id=aws_access_key,
-                    aws_secret_access_key=aws_secret_key,
-                    region_name=aws_region
-                )
-                self.backend = "s3"
-                logger.info(f"✓ S3 storage initialized (bucket: {self.folder_name})")
-            else:
-                logger.info("⚠ S3 credentials not found, using local storage")
-        except ImportError:
-            logger.info("⚠ boto3 not installed, using local storage")
-        except Exception as e:
-            logger.warning(f"⚠ Failed to initialize S3: {e}, using local storage")
-
     def exists(self, file_path: str) -> bool:
         """Check if a file exists.
 
@@ -173,12 +140,6 @@ class CloudStorage:
             try:
                 file_id = self._get_file_id(file_path)
                 return file_id is not None
-            except:
-                return False
-        elif self.backend == "s3":
-            try:
-                self.service.head_object(Bucket=self.folder_name, Key=file_path)
-                return True
             except:
                 return False
         else:
@@ -230,21 +191,6 @@ class CloudStorage:
             except Exception as e:
                 logger.error(f"Failed to save pickle to Google Drive: {e}")
                 raise
-        elif self.backend == "s3":
-            try:
-                # Serialize to bytes
-                pickled_data = pickle.dumps(data)
-
-                # Upload to S3
-                self.service.put_object(
-                    Bucket=self.folder_name,
-                    Key=file_path,
-                    Body=pickled_data
-                )
-                logger.info(f"✓ Saved pickle to S3: s3://{self.folder_name}/{file_path}")
-            except Exception as e:
-                logger.error(f"Failed to save pickle to S3: {e}")
-                raise
         else:
             # Local storage
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -283,20 +229,6 @@ class CloudStorage:
                 return data
             except Exception as e:
                 logger.error(f"Failed to load pickle from Google Drive: {e}")
-                raise
-        elif self.backend == "s3":
-            try:
-                # Download from S3
-                response = self.service.get_object(
-                    Bucket=self.folder_name,
-                    Key=file_path
-                )
-                pickled_data = response['Body'].read()
-                data = pickle.loads(pickled_data)
-                logger.info(f"✓ Loaded pickle from S3: s3://{self.folder_name}/{file_path}")
-                return data
-            except Exception as e:
-                logger.error(f"Failed to load pickle from S3: {e}")
                 raise
         else:
             # Local storage
@@ -351,22 +283,6 @@ class CloudStorage:
             except Exception as e:
                 logger.error(f"Failed to save JSON to Google Drive: {e}")
                 raise
-        elif self.backend == "s3":
-            try:
-                # Serialize to JSON string
-                json_data = json.dumps(data, indent=2)
-
-                # Upload to S3
-                self.service.put_object(
-                    Bucket=self.folder_name,
-                    Key=file_path,
-                    Body=json_data.encode('utf-8'),
-                    ContentType='application/json'
-                )
-                logger.info(f"✓ Saved JSON to S3: s3://{self.folder_name}/{file_path}")
-            except Exception as e:
-                logger.error(f"Failed to save JSON to S3: {e}")
-                raise
         else:
             # Local storage
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -407,20 +323,6 @@ class CloudStorage:
             except Exception as e:
                 logger.error(f"Failed to load JSON from Google Drive: {e}")
                 raise
-        elif self.backend == "s3":
-            try:
-                # Download from S3
-                response = self.service.get_object(
-                    Bucket=self.folder_name,
-                    Key=file_path
-                )
-                json_data = response['Body'].read().decode('utf-8')
-                data = json.loads(json_data)
-                logger.info(f"✓ Loaded JSON from S3: s3://{self.folder_name}/{file_path}")
-                return data
-            except Exception as e:
-                logger.error(f"Failed to load JSON from S3: {e}")
-                raise
         else:
             # Local storage
             with open(file_path, 'r') as f:
@@ -444,15 +346,6 @@ class CloudStorage:
                     logger.warning(f"File not found in Google Drive: {file_path}")
             except Exception as e:
                 logger.warning(f"Failed to delete from Google Drive: {e}")
-        elif self.backend == "s3":
-            try:
-                self.service.delete_object(
-                    Bucket=self.folder_name,
-                    Key=file_path
-                )
-                logger.info(f"✓ Deleted from S3: s3://{self.folder_name}/{file_path}")
-            except Exception as e:
-                logger.warning(f"Failed to delete from S3: {e}")
         else:
             # Local storage
             if os.path.exists(file_path):

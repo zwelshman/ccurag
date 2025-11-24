@@ -1352,7 +1352,6 @@ def render_documentation_page():
 
             #### Cloud Storage SDKs
             - **Google Drive**: `google-auth`, `googleapiclient`
-            - **AWS S3**: `boto3`
             - **Purpose**: Persist caches across ephemeral instances
             """)
 
