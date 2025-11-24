@@ -4,6 +4,31 @@
 
 If you see `✓ Saved pickle locally: .cache\bm25_index.pkl` instead of `✓ Saved pickle to Google Drive`, Google Drive was not properly initialized.
 
+## IMPORTANT: Service Account Limitation
+
+**Service accounts cannot write to their own Google Drive.** They need either:
+
+1. **Google Workspace Shared Drive** (requires paid account - $6+/month)
+2. **OAuth2 User Credentials** (works with free personal Google Drive - 15GB)
+
+### Error: "Service Accounts do not have storage quota"
+
+```
+ERROR:cloud_storage:Failed to save pickle to Google Drive: <HttpError 403 when requesting None returned "Service Accounts do not have storage quota. Leverage shared drives..."
+```
+
+**Solution:** Use OAuth2 credentials instead of service account for personal Google Drive:
+
+```bash
+# Install required packages
+pip install google-auth-oauthlib
+
+# Run the OAuth setup script
+python setup_gdrive_oauth.py
+```
+
+This will create `.gdrive_token.pickle` which the app will use automatically.
+
 ## Common Issue #1: Multi-line JSON in .env file
 
 **Symptoms:**

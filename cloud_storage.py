@@ -42,33 +42,52 @@ class CloudStorage:
         try:
             from googleapiclient.discovery import build
             from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
-            from google.oauth2 import service_account
             import json
+            import pickle
 
             # Import here to avoid circular dependency
             from config import Config
 
-            # Check if Google Drive credentials are available
-            gdrive_creds_json = Config.GDRIVE_CREDENTIALS_JSON
+            credentials = None
 
-            if gdrive_creds_json:
-                # Parse credentials from JSON string
+            # Option 1: Try OAuth2 token file (for personal Google Drive - free 15GB)
+            oauth_token_file = ".gdrive_token.pickle"
+            if os.path.exists(oauth_token_file):
                 try:
-                    creds_dict = json.loads(gdrive_creds_json)
-                except json.JSONDecodeError:
-                    # If it's a file path instead of JSON string
-                    if os.path.exists(gdrive_creds_json):
-                        with open(gdrive_creds_json, 'r') as f:
-                            creds_dict = json.load(f)
-                    else:
-                        raise ValueError("Invalid Google Drive credentials format")
+                    with open(oauth_token_file, 'rb') as token:
+                        credentials = pickle.load(token)
+                    logger.info("✓ Using OAuth2 credentials (personal Google Drive)")
+                except Exception as e:
+                    logger.warning(f"⚠ Failed to load OAuth2 token: {e}")
 
-                # Create credentials from service account
-                credentials = service_account.Credentials.from_service_account_info(
-                    creds_dict,
-                    scopes=['https://www.googleapis.com/auth/drive.file']
-                )
+            # Option 2: Try service account credentials (for shared drives - requires Google Workspace)
+            if not credentials:
+                gdrive_creds_json = Config.GDRIVE_CREDENTIALS_JSON
+                if gdrive_creds_json:
+                    try:
+                        from google.oauth2 import service_account
 
+                        # Parse credentials from JSON string
+                        try:
+                            creds_dict = json.loads(gdrive_creds_json)
+                        except json.JSONDecodeError:
+                            # If it's a file path instead of JSON string
+                            if os.path.exists(gdrive_creds_json):
+                                with open(gdrive_creds_json, 'r') as f:
+                                    creds_dict = json.load(f)
+                            else:
+                                raise ValueError("Invalid Google Drive credentials format")
+
+                        # Create credentials from service account
+                        credentials = service_account.Credentials.from_service_account_info(
+                            creds_dict,
+                            scopes=['https://www.googleapis.com/auth/drive.file']
+                        )
+                        logger.info("✓ Using service account credentials (requires shared drive)")
+                    except Exception as e:
+                        logger.warning(f"⚠ Failed to load service account credentials: {e}")
+
+            if credentials:
                 # Build the Drive service
                 self.service = build('drive', 'v3', credentials=credentials)
                 self.backend = "gdrive"
@@ -78,7 +97,7 @@ class CloudStorage:
 
                 logger.info(f"✓ Google Drive storage initialized (folder: {self.folder_name})")
             else:
-                logger.info("⚠ Google Drive credentials not found")
+                logger.info("⚠ Google Drive credentials not found (neither OAuth2 token nor service account)")
         except ImportError:
             logger.info("⚠ google-api-python-client not installed")
         except Exception as e:
