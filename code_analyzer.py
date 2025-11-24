@@ -255,12 +255,54 @@ class CodeAnalyzer:
 
         # Clean up table names (remove database prefixes)
         filtered_tables = set()
+
+        # Known Python modules and packages that are NOT tables
+        python_modules = {
+            'hds_functions', 'hds_curation_functions', 'hds', 'functools',
+            'pyspark', 'pandas', 'numpy', 'datetime', 'collections',
+            'itertools', 'operator', 're', 'os', 'sys', 'json', 'csv'
+        }
+
+        # Common attributes/variables that are NOT tables
+        common_attributes = {
+            'sql', 'the', 'max_rows', 'max_columns', 'result', 'output',
+            'data', 'value', 'config', 'settings', 'options', 'params',
+            'count', 'total', 'sum', 'avg', 'min', 'max', 'id', 'name',
+            'type', 'status', 'date', 'time', 'year', 'month', 'day'
+        }
+
+        # SQL keywords to skip
+        sql_keywords = {
+            'select', 'where', 'group', 'order', 'having', 'limit',
+            'offset', 'union', 'intersect', 'except', 'case', 'when',
+            'then', 'else', 'end', 'as', 'on', 'using', 'distinct'
+        }
+
         for table in tables:
             # Remove database prefixes (dars_nic_391419_j3w9t_collab.table -> table)
             table_name = table.split('.')[-1]
 
-            # Skip common SQL keywords that might be picked up
-            if table_name.lower() not in ['select', 'where', 'group', 'order', 'having', 'limit']:
+            # Skip if it's a known module, attribute, or SQL keyword
+            if table_name.lower() in python_modules | common_attributes | sql_keywords:
+                continue
+
+            # Skip single-character names or very short names (likely variables)
+            if len(table_name) < 3:
+                continue
+
+            # Only keep tables that have double underscores (HDS pattern) or common table prefixes
+            # This helps filter out random variables and attributes
+            is_likely_table = (
+                '__' in table_name or  # HDS curated assets pattern
+                table_name.startswith('hes_') or
+                table_name.startswith('gdppr_') or
+                table_name.startswith('ons_') or
+                table_name.startswith('hds_') or
+                table_name.endswith('_archive') or
+                table_name.endswith('_table')
+            )
+
+            if is_likely_table:
                 # Strip timestamped suffixes from curated table names
                 # e.g., hds_curated_assets__demographics_2024_04_25 -> hds_curated_assets__demographics
                 table_name = self._normalize_table_name(table_name)
@@ -273,7 +315,9 @@ class CodeAnalyzer:
 
         Handles formats like:
         - hds_curated_assets__demographics_2024_04_25 -> hds_curated_assets__demographics
-        - hds_curated_assets__demographics_2024_09_02 -> hds_curated_assets__demographics
+        - hds_curated_assets__demographics_20240425 -> hds_curated_assets__demographics
+        - hds_curated_assets_demographics_2024_09_02 -> hds_curated_assets_demographics
+        - hds_curated_assets_demographics_20240902 -> hds_curated_assets_demographics
 
         Args:
             table_name: Raw table name
@@ -281,10 +325,16 @@ class CodeAnalyzer:
         Returns:
             Normalized table name without timestamp suffix
         """
-        # Pattern: table_name_YYYY_MM_DD (date suffix at the end)
-        # Match 4 digits (year), 2 digits (month), 2 digits (day) separated by underscores
-        date_suffix_pattern = r'_\d{4}_\d{2}_\d{2}$'
-        normalized = re.sub(date_suffix_pattern, '', table_name)
+        # Pattern 1: table_name_YYYY_MM_DD (underscore-separated date suffix)
+        date_suffix_pattern_1 = r'_\d{4}_\d{2}_\d{2}$'
+        # Pattern 2: table_name_YYYYMMDD (compact date suffix)
+        date_suffix_pattern_2 = r'_\d{8}$'
+
+        # Try both patterns
+        normalized = re.sub(date_suffix_pattern_1, '', table_name)
+        if normalized == table_name:  # First pattern didn't match, try second
+            normalized = re.sub(date_suffix_pattern_2, '', table_name)
+
         return normalized
 
     def _parse_python_code(self, content: str) -> tuple[Set[str], Set[str]]:
@@ -490,6 +540,14 @@ class CodeAnalyzer:
             "files_by_type": dict(by_type),
             "all_files": files
         }
+
+    def get_all_tables(self) -> List[str]:
+        """Get all tables that were extracted from the codebase.
+
+        Returns:
+            Sorted list of all table names found in the indexed code
+        """
+        return sorted(self.table_to_repos.keys())
 
     def get_function_usage(self, function_pattern: str = "hds") -> Dict[str, Any]:
         """Get usage information for functions matching a pattern.
