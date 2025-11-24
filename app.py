@@ -779,7 +779,7 @@ def render_code_intelligence_page():
         # Category selector
         category = st.radio(
             "Select Category",
-            ["Demographics", "COVID", "Deaths", "HES Assets", "All Tables"],
+            ["Demographics", "COVID", "Deaths", "HES Assets", "All Extracted Tables"],
             horizontal=True
         )
 
@@ -793,7 +793,8 @@ def render_code_intelligence_page():
         elif category == "HES Assets":
             table_list = hes_tables
         else:
-            table_list = sorted(analyzer.TRACKED_TABLES)
+            # Show all tables that were actually extracted from the code
+            table_list = analyzer.get_all_tables()
 
         # Table selector
         selected_table = st.selectbox("Select Table", table_list)
