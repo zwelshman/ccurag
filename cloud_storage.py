@@ -21,13 +21,13 @@ class CloudStorage:
     for sharing across deployments.
     """
 
-    def __init__(self, folder_name: str = None):
+    def __init__(self):
         """Initialize local storage.
 
-        Args:
-            folder_name: Folder name for cache storage (not used, kept for compatibility)
+        Cache files are stored locally in the file system and can be
+        committed to Git for sharing across deployments.
         """
-        logger.info("✓ Using local storage (cache files will be saved to Git)")
+        logger.info("✓ Using local storage (cache files can be committed to Git)")
 
     def exists(self, file_path: str) -> bool:
         """Check if a file exists.

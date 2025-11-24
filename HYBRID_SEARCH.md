@@ -108,9 +108,12 @@ This will:
 1. Fetch all documents from Pinecone
 2. Tokenize them with code-aware tokenization
 3. Build BM25 index
-4. Cache the index to `.cache/bm25_index.pkl`
+4. Cache the index to `.cache/bm25_index.pkl` (runtime cache)
 
-**Note**: You need to rebuild the BM25 index whenever you update the document corpus.
+**Note**:
+- You need to rebuild the BM25 index whenever you update the document corpus.
+- To share the index across deployments, copy `.cache/bm25_index.pkl` to `data_index/bm25_index.pkl` and commit to Git.
+- The application checks `data_index/` first, then falls back to `.cache/`.
 
 ### 3. Use in Your Application
 
@@ -224,7 +227,9 @@ qa_system = QASystem(vector_store=vector_store, retriever=vector_store)
 ### Resource Usage
 
 - **Memory**: BM25 index adds ~50-100MB for typical codebases (cached to disk)
-- **Disk**: `.cache/bm25_index.pkl` stores the index
+- **Disk**:
+  - Runtime cache: `.cache/bm25_index.pkl` (50-100MB, not committed to Git)
+  - Persistent cache: `data_index/bm25_index.pkl` (optional, for sharing across deployments via Git)
 - **Compute**: Minimal additional CPU for score combining
 
 ## Maintenance
@@ -246,12 +251,16 @@ python build_hybrid_index.py
 from hybrid_retriever import HybridRetriever
 
 retriever = HybridRetriever(vector_store)
-retriever.clear_cache()
+retriever.clear_cache()  # Removes both .cache/ and data_index/ versions
 ```
 
 Or manually:
 ```bash
-rm -rf .cache/bm25_index.pkl
+# Remove runtime cache
+rm -f .cache/bm25_index.pkl
+
+# Remove persistent cache (if committed)
+rm -f data_index/bm25_index.pkl
 ```
 
 ## Troubleshooting

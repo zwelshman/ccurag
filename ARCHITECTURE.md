@@ -268,17 +268,18 @@ class CodeAnalyzer:
 
 ### 6. Local Storage (`cloud_storage.py`)
 
-**Purpose**: Persist BM25 index and code metadata locally.
+**Purpose**: Persist BM25 index and code metadata in local filesystem.
 
 **Key Responsibilities**:
 - Save/load pickle and JSON files
 - Provide consistent API for cache management
-- Store files in `.cache/` directory
+- Support dual-location caching (`.cache/` and `data_index/`)
 
 **Storage Strategy**:
-- Files stored in `.cache/` directory
-- Cache files committed to Git for sharing across deployments
-- Simple local filesystem operations
+- Runtime cache: Files stored in `.cache/` directory (not committed to Git)
+- Persistent cache: Copy files to `data_index/` directory to commit to Git for sharing across deployments
+- Application checks `data_index/` first (committed), then falls back to `.cache/` (runtime)
+- Simple local filesystem operations with no external dependencies
 
 ## Data Flow
 
@@ -307,13 +308,13 @@ class CodeAnalyzer:
    ├─→ Fetch all docs from Pinecone
    ├─→ Tokenize with code-aware tokenizer
    ├─→ Build BM25Okapi index
-   └─→ Cache to `.cache/bm25_index.pkl` (commit to Git)
+   └─→ Cache to `.cache/bm25_index.pkl` (copy to `data_index/` folder and commit to Git for sharing)
 
 7. Build Code Metadata (Separate step)
    ├─→ Fetch all repos
    ├─→ Parse Python/R/SQL files with AST
    ├─→ Extract tables, functions, imports
-   └─→ Cache to `.cache/code_metadata.json` (commit to Git)
+   └─→ Cache to `.cache/code_metadata.json` (copy to `data_index/` folder and commit to Git for sharing)
 ```
 
 ### Q&A Query Phase (Runtime)
@@ -379,7 +380,8 @@ class CodeAnalyzer:
    └─→ Example: "Show usage of hds_curated_assets__deaths_single"
 
 2. Load Cached Metadata
-   ├─→ Load from local cache: `.cache/code_metadata.json`
+   ├─→ Check for `data_index/code_metadata.json` (committed cache)
+   ├─→ Fallback to `.cache/code_metadata.json` (runtime cache) if not found
    └─→ Parse JSON into memory
 
 3. Direct Lookup
@@ -895,9 +897,9 @@ tables = extract_table_references(sql)
 ### Pinecone (Cloud Vector Database)
 
 **Why Cloud Vector Database?**
-- **Persistence**: Data survives app restarts
+- **Persistence**: Data survives app restarts - stored in Pinecone's cloud infrastructure
 - **Managed**: No infrastructure to maintain
-- **Fast**: Optimized for similarity search
+- **Fast**: Optimized for similarity search (<50ms queries)
 - **Scalable**: Handles growth without re-architecting
 
 **Data Stored**:
@@ -906,27 +908,30 @@ tables = extract_table_references(sql)
 - Total size: ~10-50MB for 1000s of documents
 
 **Persistence Model**:
-- Data is permanent until explicitly deleted
-- No backups needed (Pinecone handles that)
-- Re-indexing only needed when repos change
+- Data is permanent in Pinecone cloud until explicitly deleted
+- Pinecone handles backups and redundancy
+- Re-indexing only needed when repository content changes
 
-### Local Storage (Git-based)
+### Local Filesystem Storage
 
 **Storage Strategy**:
-- Cache files stored in `.cache/` directory
-- Committed to Git repository for sharing
-- No external storage services required
+- **Runtime cache**: Files stored in `.cache/` directory (not committed to Git, regenerated as needed)
+- **Persistent cache**: Files manually copied to `data_index/` directory and committed to Git for sharing across deployments
+- **Loading priority**: Application checks `data_index/` first (committed cache), then falls back to `.cache/` (runtime cache)
+- No external cloud storage services required (besides Pinecone for vectors)
 
-**What's Stored**:
-- `.cache/bm25_index.pkl`: BM25 index (50-100MB)
-- `.cache/code_metadata.json`: Code intelligence data (5-20MB)
+**What's Stored Locally**:
+- `.cache/bm25_index.pkl`: BM25 search index (50-100MB, runtime cache)
+- `.cache/code_metadata.json`: Code intelligence data (5-20MB, runtime cache)
+- `data_index/bm25_index.pkl`: Committed BM25 index (optional, for sharing)
+- `data_index/code_metadata.json`: Committed metadata (optional, for sharing)
 
 **Implementation**:
 ```python
 class CloudStorage:
     def __init__(self):
-        # Simple local storage
-        logger.info("✓ Using local storage (cache files will be saved to Git)")
+        # Simple local filesystem storage
+        logger.info("✓ Using local storage (cache files can be committed to Git)")
 ```
 
 ### Cache Loading Strategy
@@ -934,18 +939,23 @@ class CloudStorage:
 ```
 App Startup
     ↓
-Check if cache exists locally
-    ├─→ Yes: Load from local cache (200ms)
-    └─→ No: Build from scratch (10-30min)
-            Then commit to Git
+Check for committed cache (data_index/)
+    ├─→ Yes: Load from data_index/ (200ms)
+    └─→ No: Check for runtime cache (.cache/)
+            ├─→ Yes: Load from .cache/ (200ms)
+            └─→ No: Build from scratch (10-30min)
+                    ↓
+                    Save to .cache/
+                    (optionally copy to data_index/ and commit)
 ```
 
 **First Run** (no cache):
 - 10-30 minutes to build indices
-- Commit cache files to Git
+- Saved to `.cache/` directory
+- Optionally copy to `data_index/` and commit to Git for sharing
 
-**Subsequent Runs** (cached):
-- Instant loading from local cache (200ms)
+**Subsequent Runs** (with cache):
+- Instant loading from available cache location (200ms)
 
 ## Performance Considerations
 
@@ -1025,14 +1035,14 @@ with ThreadPoolExecutor(max_workers=4) as executor:
 - **Pinecone**: Serverless scales automatically
 - **BM25**: Linear search, but fast (<100ms even for 100k docs)
 - **Claude API**: Rate limits (5000 requests/day on free tier)
-- **Storage**: Git repository storage (cache files ~50-100MB)
+- **Local Storage**: Git repository size (cache files ~50-100MB if committed to `data_index/`)
 
 ### Cost Estimates
 
 **Monthly Costs (50 repos)**:
-- Pinecone: $0 (free tier)
+- Pinecone: $0 (free tier for small deployments)
 - Claude API: $5-20 (depends on query volume)
-- Git storage: $0 (included with Git hosting)
+- Local storage: $0 (local filesystem, optionally committed to Git)
 - **Total**: $5-20/month
 
 **Per-Query Costs**:
@@ -1049,7 +1059,7 @@ This architecture combines the best of multiple approaches:
 1. **RAG** for natural language understanding and flexibility
 2. **Hybrid Search** for accuracy on both code and conceptual queries
 3. **Static Analysis** for deterministic code intelligence
-4. **Git-based Storage** for persistence and easy sharing
+4. **Dual Storage Strategy**: Pinecone cloud for vectors, local filesystem with optional Git-based sharing for indices
 
 **Result**: A production-ready system that's fast, accurate, and cost-effective for exploring code repositories.
 
