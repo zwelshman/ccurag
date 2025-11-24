@@ -29,6 +29,38 @@ python setup_gdrive_oauth.py
 
 This will create `.gdrive_token.pickle` which the app will use automatically.
 
+## OAuth2 Issue: "App hasn't completed Google verification process"
+
+**Symptoms:**
+```
+This app has not completed the Google verification process.
+The app is currently being tested, and can only be accessed by developer-approved testers.
+```
+
+**Problem:** Your OAuth2 app is in "testing" mode and you haven't added yourself as a test user.
+
+**Solution 1: Add yourself as a test user (Recommended)**
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Select your project
+3. Navigate to **APIs & Services** → **OAuth consent screen**
+4. Scroll down to **Test users** section
+5. Click **+ ADD USERS**
+6. Enter your Google email address
+7. Click **SAVE**
+8. Re-run the setup script: `python setup_gdrive_oauth_easy.py`
+
+**Solution 2: Click through the warning**
+
+If you see the warning screen:
+1. Click **Advanced** (bottom left)
+2. Click **Go to [Your App Name] (unsafe)**
+3. Click **Continue** to grant permissions
+
+This works because you're the developer, but adding yourself as a test user is cleaner.
+
+**Note:** You only need to publish/verify your app if you want to distribute it publicly. For personal or development use, staying in "testing" mode is fine!
+
 ## Common Issue #1: Multi-line JSON in .env file
 
 **Symptoms:**

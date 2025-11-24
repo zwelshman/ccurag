@@ -50,13 +50,28 @@ Use a **Google Workspace Shared Drive** (requires paid account).
    - Navigate to "APIs & Services" > "Library"
    - Search for "Google Drive API"
    - Click "Enable"
-4. Create OAuth2 credentials:
+4. Configure OAuth consent screen (if not already done):
+   - Navigate to "APIs & Services" > "OAuth consent screen"
+   - Choose "External" user type (unless you have Google Workspace)
+   - Fill in required fields (app name, user support email, developer email)
+   - Click "Save and Continue"
+   - Skip scopes (click "Save and Continue")
+   - **IMPORTANT:** Add test users:
+     - Scroll to "Test users" section
+     - Click "+ ADD USERS"
+     - Add your Google email address
+     - Click "SAVE"
+5. Create OAuth2 credentials:
    - Navigate to "APIs & Services" > "Credentials"
    - Click "Create Credentials" > "OAuth client ID"
-   - Choose "Desktop application"
+   - Choose "Desktop application" (or "Web application" if you prefer)
    - Give it a name (e.g., "CCURAG Local Dev")
+   - If using "Web application", add these redirect URIs:
+     - `http://localhost:8080/`
+     - `http://localhost:8081/`
+     - `http://localhost:8082/`
    - Click "Create"
-5. Download the credentials JSON file
+6. Download the credentials JSON file
    - Click the download icon next to your OAuth client
    - Save as `oauth_client.json` in your project directory
 
@@ -66,15 +81,22 @@ Use a **Google Workspace Shared Drive** (requires paid account).
 # Make sure dependencies are installed
 pip install -r requirements.txt
 
-# Run the OAuth setup script
+# Option A: Easy setup (accepts JSON content OR file path)
+python setup_gdrive_oauth_easy.py
+
+# Option B: Original setup (file path only)
 python setup_gdrive_oauth.py
 ```
 
 This will:
-1. Prompt you for the OAuth client JSON file path
+1. Prompt you for the OAuth client JSON (file path or paste content)
 2. Open a browser window for you to authorize the app
 3. Create `.gdrive_token.pickle` in your project directory
 4. Test the connection
+
+**If you see "App hasn't been verified":**
+- Make sure you added yourself as a test user (Step 1)
+- Or click "Advanced" → "Go to [App Name] (unsafe)" → "Continue"
 
 #### Step 3: Run Your App
 
