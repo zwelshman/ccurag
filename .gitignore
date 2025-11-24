@@ -11,3 +11,9 @@ ENV/
 *.log
 .DS_Store
 .cache/
+
+# Google Drive credentials (never commit these!)
+.gdrive_token.pickle
+oauth_client.json
+*_credentials.json
+*-credentials.json
