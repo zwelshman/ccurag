@@ -24,7 +24,7 @@ This system provides two complementary capabilities:
   - BM25 excels at exact term matching (function names, identifiers)
   - Vector search understands meaning and context
   - Adaptive weighting based on query type (code vs. conceptual)
-- **Persistent Storage**: Uses Pinecone vector database for embeddings - data persists across sessions. Cache files are stored in Git for easy sharing
+- **Persistent Storage**: Uses Pinecone cloud vector database for embeddings - data persists across sessions. Local cache files are stored in `.cache/` directory and can be committed to `data_index/` folder in Git for easy sharing across deployments
 - **Comprehensive Indexing**: Indexes README files and code from all organization repositories
 - **Intelligent Q&A**: Uses Anthropic Claude 4.5 Sonnet with RAG to answer questions
 - **Source Attribution**: Shows which repositories and files were used to generate answers with relevance scores
@@ -110,7 +110,7 @@ Reverse Indices (table→repos, function→repos) → Fast Lookups
 - **Hybrid Retriever** (`hybrid_retriever.py`): Combines BM25 and vector search with adaptive weighting
 - **QA System** (`qa_chain.py`): Formats prompts and calls Anthropic Claude API
 - **Code Analyzer** (`code_analyzer.py`): Parses code and extracts structured metadata
-- **Cloud Storage** (`cloud_storage.py`): Local cache storage - commit cache files to Git for sharing
+- **Local Storage** (`cloud_storage.py`): Local filesystem cache storage - stores files in `.cache/` directory and optionally in `data_index/` folder for Git-based sharing
 - **Streamlit App** (`app.py`): Web interface with Q&A, Code Intelligence, Documentation, and Setup tabs
 
 ## 🛠️ Technologies Used
@@ -528,12 +528,12 @@ The application has 4 main tabs:
    - Fetch documents from Pinecone
    - Tokenize with code-aware tokenizer
    - Build BM25Okapi index
-   - Cache to `.cache/bm25_index.pkl` (commit to Git for sharing)
+   - Cache to `.cache/bm25_index.pkl` (copy to `data_index/` folder and commit to Git for sharing across deployments)
 7. **Build Code Metadata** (separate step):
    - Parse Python/R/SQL files with AST
    - Extract tables, functions, imports
    - Build reverse indices
-   - Cache to `.cache/code_metadata.json` (commit to Git for sharing)
+   - Cache to `.cache/code_metadata.json` (copy to `data_index/` folder and commit to Git for sharing across deployments)
 
 ### RAG Query Phase (Runtime)
 
@@ -556,7 +556,7 @@ The application has 4 main tabs:
 ### Code Intelligence Query Phase (Runtime)
 
 1. **User Selection**: Choose structured query (e.g., "Show usage of table X")
-2. **Load Metadata**: Load from local cache (`.cache/code_metadata.json`) → parse JSON
+2. **Load Metadata**: Load from cache (`data_index/code_metadata.json` if available, otherwise `.cache/code_metadata.json`) → parse JSON
 3. **Direct Lookup**: O(1) hash lookup in reverse index
 4. **Format Results**: Structure data (repos, files, line numbers, counts)
 5. **Display**: Interactive UI with expandable file lists and statistics
