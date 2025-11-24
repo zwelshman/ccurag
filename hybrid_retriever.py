@@ -41,7 +41,7 @@ class HybridRetriever:
         self.bm25_cache_file = os.path.join(self.cache_dir, "bm25_index.pkl")
 
         # Initialize cloud storage
-        self.storage = CloudStorage(bucket_name=Config.S3_BUCKET_NAME)
+        self.storage = CloudStorage(folder_name=Config.GDRIVE_FOLDER_NAME)
 
         logger.info(f"Initialized HybridRetriever with BM25 weight: {self.bm25_weight:.2f}, "
                    f"Vector weight: {self.vector_weight:.2f}")
