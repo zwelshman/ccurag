@@ -71,6 +71,16 @@ class Config:
     BM25_WEIGHT = float(get_secret("BM25_WEIGHT", "0.4"))  # 40% BM25, 60% vector by default
     USE_ADAPTIVE_WEIGHTS = get_secret("USE_ADAPTIVE_WEIGHTS", "true").lower() == "true"
 
+    # Cloud Storage Settings (for Streamlit Cloud persistence)
+    # Google Drive (recommended - free 15GB)
+    GDRIVE_CREDENTIALS_JSON = get_secret("GDRIVE_CREDENTIALS_JSON")
+
+    # AWS S3 (alternative)
+    AWS_ACCESS_KEY_ID = get_secret("AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY = get_secret("AWS_SECRET_ACCESS_KEY")
+    AWS_REGION = get_secret("AWS_REGION", "us-east-1")
+    S3_BUCKET_NAME = get_secret("S3_BUCKET_NAME", "ccurag-cache")
+
     @classmethod
     def validate(cls):
         """Validate required configuration."""
