@@ -4,6 +4,43 @@
 
 If you see `✓ Saved pickle locally: .cache\bm25_index.pkl` instead of `✓ Saved pickle to Google Drive`, Google Drive was not properly initialized.
 
+## Common Issue #1: Multi-line JSON in .env file
+
+**Symptoms:**
+```
+python-dotenv could not parse statement starting at line 29
+python-dotenv could not parse statement starting at line 30
+...
+INFO:cloud_storage:⚠ Google Drive credentials not found
+```
+
+**Problem:** Your `GDRIVE_CREDENTIALS_JSON` is formatted across multiple lines in the `.env` file. Python-dotenv **requires the entire JSON to be on a single line**.
+
+**❌ Wrong (multi-line format):**
+```bash
+GDRIVE_CREDENTIALS_JSON={
+  "type": "service_account",
+  "project_id": "...",
+  ...
+}
+```
+
+**✅ Correct (single-line format):**
+```bash
+GDRIVE_CREDENTIALS_JSON={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"...","client_id":"...","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url":"...","universe_domain":"googleapis.com"}
+```
+
+**Quick fix:**
+```bash
+# Use the converter script
+python convert_gdrive_creds.py
+
+# Or manually convert:
+# 1. Open your credentials JSON file
+# 2. Remove all newlines and spaces (except in values)
+# 3. Paste as single line in .env
+```
+
 ## Diagnostic Steps
 
 ### 1. Check for initialization messages
