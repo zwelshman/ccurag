@@ -43,7 +43,7 @@ class HybridRetriever:
         self.bm25_data_index_file = os.path.join(self.data_index_dir, "bm25_index.pkl")
 
         # Initialize cloud storage
-        self.storage = CloudStorage(folder_name=Config.GDRIVE_FOLDER_NAME)
+        self.storage = CloudStorage()
 
         logger.info(f"Initialized HybridRetriever with BM25 weight: {self.bm25_weight:.2f}, "
                    f"Vector weight: {self.vector_weight:.2f}")
