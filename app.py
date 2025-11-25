@@ -472,6 +472,7 @@ def render_qa_page():
 
     example_questions = [
         'What is the standard pipeline project?',
+        'what is in the health data science team documentation?',
         'What is the hds_curated_asset for patient demograhics, what is the methodology behind it?',
         'Which projects are investigating the impact of diabetes on covid-19?,'
         'What projects have defined an MI phenotype?',
