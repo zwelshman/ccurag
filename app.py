@@ -474,7 +474,7 @@ def render_qa_page():
         'What is the standard pipeline project?',
         'What is the hds_curated_asset for patient demograhics, what is the methodology behind it?',
         'Which projects are investigating the impact of diabetes on covid-19?,'
-        'What projects have defined an MI phenotype?,'
+        'What projects have defined an MI phenotype?',
     ]
 
     cols = st.columns(2)
