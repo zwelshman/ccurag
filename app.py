@@ -471,11 +471,10 @@ def render_qa_page():
     st.subheader("💡 Example Questions")
 
     example_questions = [
-        "What COVID-19 and cardiovascular research projects are in this organization?",
-        "Which repositories contain Python code for data analysis?",
-        "What phenotyping algorithms are used in the CCU projects?",
-        "Show me repositories that work with linked electronic health records",
-        "What machine learning methods are used in these projects?",
+        'What is the standard pipeline project?',
+        'What is the hds_curated_asset for patient demograhics, what is the methodology behind it?',
+        'Which projects are investigating the impact of diabetes on covid-19?,'
+        'What projects have defined an MI phenotype?,'
     ]
 
     cols = st.columns(2)
