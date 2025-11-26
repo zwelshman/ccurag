@@ -1,11 +1,15 @@
-"""AI-powered R code generation using dbplyr patterns.
+"""AI-powered code generation for Python/PySpark and R/dbplyr.
 
-Provides code intelligence for R/dbplyr development:
-- Template generation: Create boilerplate based on org patterns
+Based on BHFDSC standard-pipeline patterns:
+https://github.com/BHFDSC/standard-pipeline
+
+Provides code intelligence for both Python and R development:
+- Template generation: Create boilerplate based on standard-pipeline patterns
 - Code completion: Suggest context-aware code snippets
 - Refactoring suggestions: Propose improvements with diffs
 - Test generation: Auto-create tests for uncovered code
 - Documentation generation: Auto-write docstrings, READMEs
+- Language translation: Convert between Python/PySpark and R/dbplyr
 
 Designed to work with RAG system to learn from existing codebases.
 """
@@ -51,10 +55,390 @@ class CodeSuggestion:
 
 
 class RCodeGenerator:
-    """Generates R code using dbplyr based on learned patterns."""
+    """Generates code for both Python/PySpark and R/dbplyr based on standard-pipeline patterns."""
 
-    # Standard R/dbplyr template patterns (based on standard-pipeline Python patterns)
-    STANDARD_TEMPLATES = {
+    # Python/PySpark templates - actual patterns from BHFDSC standard-pipeline
+    PYTHON_TEMPLATES = {
+        "table_loader": {
+            "template": """from pyspark.sql import functions as f
+from pyspark.sql import DataFrame
+from typing import Optional
+
+def load_table(
+    spark,
+    table_name: str,
+    archive_date: Optional[str] = None,
+    standardize: bool = True
+) -> DataFrame:
+    '''Load and standardize a table.
+
+    Args:
+        spark: SparkSession
+        table_name: Name of table to load
+        archive_date: Optional archive date filter (YYYY-MM-DD format)
+        standardize: Whether to apply standardization
+
+    Returns:
+        DataFrame with loaded and optionally standardized table
+
+    Example:
+        >>> demographics = load_table(spark, 'demographics', archive_date='2024-01-01')
+    '''
+    # Load table
+    df = spark.table(table_name)
+
+    # Apply archive filtering if specified
+    if archive_date is not None:
+        df = df.filter(f.col('archive_date') == archive_date)
+
+    # Standardize column names and person ID
+    if standardize:
+        # Rename person ID column to standard name
+        for col in df.columns:
+            if 'person_id' in col.lower() or 'pseudo_id' in col.lower():
+                df = df.withColumnRenamed(col, 'person_id')
+
+        # Clean column names (lowercase, replace spaces with underscores)
+        for col in df.columns:
+            new_col = col.lower().replace(' ', '_')
+            if new_col != col:
+                df = df.withColumnRenamed(col, new_col)
+
+    return df
+""",
+            "description": "Load and standardize tables (from table_management.py)",
+            "tags": ["python", "pyspark", "table", "loading"]
+        },
+
+        "cohort_pipeline": {
+            "template": """# Databricks notebook source
+# MAGIC %md
+# MAGIC # {pipeline_name}
+# MAGIC
+# MAGIC **Purpose**: {purpose}
+# MAGIC
+# MAGIC **Author**: Auto-generated
+# MAGIC **Date**: {date}
+
+# COMMAND ----------
+
+# MAGIC %run ./project_config
+
+# COMMAND ----------
+
+# MAGIC %run ./parameters
+
+# COMMAND ----------
+
+from pyspark.sql import functions as f
+from functions.table_management import load_table, save_table
+from functions.cohort_construction import apply_inclusion_criteria
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 1. Load Base Cohort
+
+# COMMAND ----------
+
+# Load base cohort data
+cohort_base = load_table(spark, '{base_table}')
+
+# Apply initial filters
+cohort_filtered = cohort_base.filter(
+    {initial_filters}
+)
+
+# Add study dates from parameters
+cohort_with_dates = (
+    cohort_filtered
+    .withColumn('cohort_entry_start_date', f.to_date(f.lit(cohort_entry_start_date)))
+    .withColumn('cohort_entry_end_date', f.to_date(f.lit(cohort_entry_end_date)))
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 2. Apply Pipeline Steps
+
+# COMMAND ----------
+
+{pipeline_steps}
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 3. Save Results
+
+# COMMAND ----------
+
+save_table(cohort_final, '{output_table}', overwrite=True)
+
+# COMMAND ----------
+
+# Display summary statistics
+print(f"Total rows in final cohort: {{cohort_final.count()}}")
+print(f"Total unique persons: {{cohort_final.select('person_id').distinct().count()}}")
+""",
+            "description": "Complete cohort construction pipeline (Databricks notebook format)",
+            "tags": ["python", "pyspark", "cohort", "pipeline", "notebook"]
+        },
+
+        "inclusion_criteria": {
+            "template": """from pyspark.sql import functions as f
+from functions.cohort_construction import apply_inclusion_criteria
+
+# Define inclusion criteria as SQL expressions
+inclusion_criteria = {{
+    '{criterion_1_name}': '{criterion_1_sql}',
+    '{criterion_2_name}': '{criterion_2_sql}',
+    '{criterion_3_name}': '{criterion_3_sql}',
+}}
+
+# Apply inclusion criteria and create flowchart
+cohort_final = apply_inclusion_criteria(
+    cohort=cohort_base,
+    inclusion_criteria=inclusion_criteria,
+    row_id_col='row_id',
+    person_id_col='person_id',
+    flowchart_table='{flowchart_table_name}',
+    clean_up=True  # Remove intermediate criteria columns
+)
+
+# The flowchart table shows exclusions at each step
+flowchart = spark.table('{flowchart_table_name}')
+display(flowchart)
+""",
+            "description": "Apply inclusion criteria with flowchart tracking (from cohort_construction.py)",
+            "tags": ["python", "pyspark", "cohort", "criteria", "flowchart"]
+        },
+
+        "phenotyping_algorithm": {
+            "template": """from pyspark.sql import functions as f
+from pyspark.sql import Window
+
+def identify_{phenotype_id}(
+    cohort: DataFrame,
+    clinical_events: DataFrame,
+    codelists_path: str,
+    index_date_col: str = 'index_date',
+    lookback_days: int = 365
+) -> DataFrame:
+    '''Identify patients with {phenotype_name}.
+
+    {condition_description}
+
+    Args:
+        cohort: Base cohort DataFrame with person_id
+        clinical_events: Clinical events table
+        codelists_path: Path to codelist CSV file
+        index_date_col: Column name containing index date
+        lookback_days: Days to look back from index date
+
+    Returns:
+        DataFrame with person_id and phenotype flags
+    '''
+    # Load codelists
+    codelists = spark.read.csv(codelists_path, header=True)
+
+    # Filter clinical events to relevant time window and codes
+    events_filtered = (
+        clinical_events
+        .join(cohort.select('person_id', index_date_col), on='person_id', how='inner')
+        .filter(
+            (f.col('event_date') >= f.date_sub(f.col(index_date_col), lookback_days)) &
+            (f.col('event_date') <= f.col(index_date_col))
+        )
+        .join(codelists.select('code'), on='code', how='inner')
+    )
+
+    # Aggregate to person level
+    phenotype = (
+        events_filtered
+        .groupBy('person_id')
+        .agg(
+            f.lit(1).alias('{phenotype_id}_flag'),
+            f.min('event_date').alias('{phenotype_id}_first_date'),
+            f.count('*').alias('{phenotype_id}_event_count')
+        )
+    )
+
+    return phenotype
+""",
+            "description": "Phenotyping algorithm template based on standard-pipeline patterns",
+            "tags": ["python", "pyspark", "phenotyping", "clinical"]
+        },
+
+        "privacy_control": {
+            "template": """from pyspark.sql import functions as f
+
+def round_counts_to_multiple(
+    df: DataFrame,
+    columns: list,
+    multiple: int = 5
+) -> DataFrame:
+    '''Round count values to nearest multiple for disclosure control.
+
+    Args:
+        df: DataFrame containing count columns
+        columns: List of columns to round
+        multiple: Rounding interval (default 5)
+
+    Returns:
+        DataFrame with rounded count columns
+    '''
+    for col in columns:
+        df = df.withColumn(
+            col,
+            f.round(f.col(col) / multiple) * multiple
+        )
+    return df
+
+
+def redact_low_counts(
+    df: DataFrame,
+    columns: list,
+    threshold: int = 10,
+    redaction_value: str = '[REDACTED]'
+) -> DataFrame:
+    '''Suppress low counts below threshold for disclosure control.
+
+    Args:
+        df: DataFrame containing count columns
+        columns: List of columns to check
+        threshold: Minimum value to show (default 10)
+        redaction_value: Value to use for redacted cells
+
+    Returns:
+        DataFrame with low counts suppressed
+    '''
+    for col in columns:
+        df = df.withColumn(
+            col,
+            f.when(f.col(col) >= threshold, f.col(col)).otherwise(redaction_value)
+        )
+    return df
+
+
+# Example usage
+summary_safe = (
+    summary
+    .transform(lambda df: round_counts_to_multiple(df, ['count', 'total'], multiple=5))
+    .transform(lambda df: redact_low_counts(df, ['count', 'total'], threshold=10))
+)
+""",
+            "description": "Privacy and disclosure control functions (from data_privacy.py)",
+            "tags": ["python", "pyspark", "privacy", "disclosure"]
+        },
+
+        "data_quality_check": {
+            "template": """from pyspark.sql import functions as f
+
+def check_data_quality(
+    df: DataFrame,
+    table_name: str,
+    required_columns: list
+) -> dict:
+    '''Perform comprehensive data quality checks.
+
+    Args:
+        df: DataFrame to check
+        table_name: Name of table for reporting
+        required_columns: List of columns that must be present
+
+    Returns:
+        Dictionary with check results
+    '''
+    results = {{'table_name': table_name}}
+
+    # Check 1: Required columns present
+    actual_columns = df.columns
+    missing_columns = set(required_columns) - set(actual_columns)
+    results['columns_present'] = len(missing_columns) == 0
+    results['missing_columns'] = list(missing_columns)
+
+    # Check 2: Row count
+    row_count = df.count()
+    results['row_count'] = row_count
+    results['has_data'] = row_count > 0
+
+    # Check 3: Null counts for required columns
+    null_counts = {{}}
+    for col in required_columns:
+        if col in actual_columns:
+            null_count = df.filter(f.col(col).isNull()).count()
+            null_counts[col] = null_count
+    results['null_counts'] = null_counts
+
+    # Check 4: Duplicate person IDs
+    if 'person_id' in actual_columns:
+        dup_count = (
+            df.groupBy('person_id')
+            .count()
+            .filter(f.col('count') > 1)
+            .count()
+        )
+        results['duplicate_person_ids'] = dup_count
+
+    return results
+
+
+# Example usage
+quality_results = check_data_quality(
+    cohort_final,
+    'cohort_final',
+    ['person_id', 'index_date', 'age', 'sex']
+)
+
+# Print results
+for key, value in quality_results.items():
+    print(f"{{key}}: {{value}}")
+""",
+            "description": "Data quality validation checks",
+            "tags": ["python", "pyspark", "quality", "validation"]
+        },
+
+        "test_function": {
+            "template": """import pytest
+from pyspark.sql import functions as f
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DateType
+
+def test_{function_name}(spark):
+    '''Test {function_name} function.'''
+
+    # Setup: Create test data
+    schema = StructType([
+        StructField('person_id', StringType(), False),
+        {test_schema_fields}
+    ])
+
+    test_data = [
+        {test_data_rows}
+    ]
+
+    test_df = spark.createDataFrame(test_data, schema)
+
+    # Execute
+    result = {function_name}({test_params})
+
+    # Assert: Normal case
+    assert result.count() == {expected_count}, "Expected {{}} rows".format({expected_count})
+
+    # Assert: Data validation
+    {assertions}
+
+    # Edge case: Empty input
+    empty_df = spark.createDataFrame([], schema)
+    empty_result = {function_name}({empty_test_params})
+    assert empty_result.count() == 0, "Empty input should return empty result"
+""",
+            "description": "Pytest test template for PySpark functions",
+            "tags": ["python", "pyspark", "test", "pytest"]
+        }
+    }
+
+    # R/dbplyr templates - dbplyr equivalents of Python patterns
+    R_TEMPLATES = {
         "cohort_pipeline": {
             "template": """# {pipeline_name}
 # Purpose: {purpose}
@@ -309,20 +693,25 @@ check_data_quality <- function(tbl_data, required_cols) {{
 
     def generate_template(self,
                          template_type: str,
-                         params: Dict[str, Any]) -> CodeSuggestion:
+                         params: Dict[str, Any],
+                         language: str = "r") -> CodeSuggestion:
         """Generate code from a template.
 
         Args:
             template_type: Type of template (e.g., 'cohort_pipeline', 'table_loader')
             params: Parameters to fill in template
+            language: Target language ('python' or 'r', default 'r')
 
         Returns:
             CodeSuggestion with generated code
         """
-        if template_type not in self.STANDARD_TEMPLATES:
+        # Select appropriate template dictionary
+        templates = self.PYTHON_TEMPLATES if language.lower() == "python" else self.R_TEMPLATES
+
+        if template_type not in templates:
             # Try to find similar patterns using RAG
             if self.hybrid_retriever and self.anthropic_client:
-                return self._generate_custom_template(template_type, params)
+                return self._generate_custom_template(template_type, params, language)
             else:
                 return CodeSuggestion(
                     suggestion_type="template",
@@ -331,7 +720,7 @@ check_data_quality <- function(tbl_data, required_cols) {{
                     confidence=0.0
                 )
 
-        template_info = self.STANDARD_TEMPLATES[template_type]
+        template_info = templates[template_type]
         template_str = template_info["template"]
 
         # Fill in template parameters
@@ -346,9 +735,9 @@ check_data_quality <- function(tbl_data, required_cols) {{
             return CodeSuggestion(
                 suggestion_type="template",
                 code=code,
-                explanation=f"Generated {template_type} template: {template_info['description']}",
+                explanation=f"Generated {language.upper()} {template_type} template: {template_info['description']}",
                 confidence=0.95,
-                context=f"Tags: {', '.join(template_info['tags'])}"
+                context=f"Language: {language.upper()} | Tags: {', '.join(template_info['tags'])}"
             )
         except KeyError as e:
             return CodeSuggestion(
@@ -360,18 +749,21 @@ check_data_quality <- function(tbl_data, required_cols) {{
 
     def _generate_custom_template(self,
                                   template_type: str,
-                                  params: Dict[str, Any]) -> CodeSuggestion:
+                                  params: Dict[str, Any],
+                                  language: str = "r") -> CodeSuggestion:
         """Generate custom template using RAG and Claude.
 
         Args:
             template_type: Description of what to generate
             params: Parameters for the template
+            language: Target language ('python' or 'r')
 
         Returns:
             CodeSuggestion with AI-generated code
         """
         # Search for similar examples in codebase
-        query = f"{template_type} R code dbplyr example"
+        lang_specific = "Python PySpark" if language.lower() == "python" else "R dbplyr"
+        query = f"{template_type} {lang_specific} example"
         similar_docs = self.hybrid_retriever.similarity_search(query, k=5)
 
         # Build context from similar examples
@@ -381,7 +773,25 @@ check_data_quality <- function(tbl_data, required_cols) {{
         ])
 
         # Construct prompt for Claude
-        prompt = f"""Based on the following R code examples from the codebase, generate a new R/dbplyr code template for: {template_type}
+        if language.lower() == "python":
+            prompt = f"""Based on the following Python/PySpark code examples from the codebase, generate a new Python/PySpark code template for: {template_type}
+
+Parameters to include:
+{chr(10).join(f'- {k}: {v}' for k, v in params.items())}
+
+Examples from codebase:
+{context}
+
+Generate clean, well-documented Python code following the patterns shown in the examples. Include:
+1. Proper docstrings (Google/NumPy style)
+2. PySpark DataFrame operations
+3. Error handling
+4. Comments explaining key steps
+5. Type hints where appropriate
+
+Output only the Python code, no explanations."""
+        else:
+            prompt = f"""Based on the following R code examples from the codebase, generate a new R/dbplyr code template for: {template_type}
 
 Parameters to include:
 {chr(10).join(f'- {k}: {v}' for k, v in params.items())}
@@ -582,8 +992,8 @@ Format your response as a JSON array:
             params = [p.strip().split('=')[0].strip() for p in params_str.split(',') if p.strip()]
 
         if not self.anthropic_client:
-            # Use template-based test generation
-            template = self.STANDARD_TEMPLATES["test_function"]
+            # Use template-based test generation (R version)
+            template = self.R_TEMPLATES["test_function"]
             test_code = template["template"].format(
                 function_name=function_name,
                 setup_code="  # TODO: Setup test data",

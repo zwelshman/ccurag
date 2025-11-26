@@ -1515,19 +1515,22 @@ def render_documentation_page():
 
 
 def render_r_code_generator_page():
-    """Render the R Code Generator page."""
-    st.title("🤖 AI Code Generator (R/dbplyr)")
+    """Render the AI Code Generator page (Python & R)."""
+    st.title("🤖 AI Code Generator")
+    st.subheader("Python/PySpark & R/dbplyr")
 
     st.markdown("""
-    Generate R code using dbplyr patterns inspired by the [BHFDSC standard-pipeline](https://github.com/BHFDSC/standard-pipeline).
+    Generate code using patterns from the [BHFDSC standard-pipeline](https://github.com/BHFDSC/standard-pipeline).
+
+    **Supports both Python/PySpark (original) and R/dbplyr (translated)!**
 
     **Features:**
-    - 📋 **Template Generation**: Create boilerplate code based on organizational patterns
-    - 💡 **Code Completion**: Context-aware code suggestions
-    - 🧪 **Test Generation**: Auto-create testthat tests for R functions
-    - 📝 **Documentation**: Generate roxygen2 documentation
-    - 🔧 **Refactoring**: Suggest code improvements
-    - 🔄 **Translation**: Convert Python/PySpark to R/dbplyr
+    - 📋 **Template Generation**: Create boilerplate from actual standard-pipeline patterns
+    - 💡 **Code Completion**: Context-aware suggestions for both languages
+    - 🧪 **Test Generation**: pytest (Python) or testthat (R) tests
+    - 📝 **Documentation**: Docstrings (Python) or roxygen2 (R) docs
+    - 🔧 **Refactoring**: Language-specific code improvements
+    - 🔄 **Translation**: Convert between Python/PySpark ↔ R/dbplyr
     """)
 
     # Initialize code generator
@@ -1570,19 +1573,23 @@ def render_r_code_generator_page():
     # TAB 1: Template Generation
     with gen_tabs[0]:
         st.header("Generate Code Templates")
-        st.markdown("Create boilerplate R/dbplyr code based on standard patterns.")
+        st.markdown("Create boilerplate code based on BHFDSC standard-pipeline patterns.")
+
+        # Language selector
+        language = st.radio(
+            "Target Language",
+            ["Python/PySpark", "R/dbplyr"],
+            horizontal=True,
+            help="Choose whether to generate Python/PySpark or R/dbplyr code"
+        )
+        lang_code = "python" if language == "Python/PySpark" else "r"
+
+        # Get available templates for selected language
+        available_templates = list(generator.PYTHON_TEMPLATES.keys() if lang_code == "python" else generator.R_TEMPLATES.keys())
 
         template_type = st.selectbox(
             "Select Template Type",
-            [
-                "cohort_pipeline",
-                "table_loader",
-                "demographics_join",
-                "codelist_filter",
-                "phenotyping_algorithm",
-                "data_quality_check",
-                "aggregate_with_privacy"
-            ],
+            available_templates,
             format_func=lambda x: x.replace("_", " ").title()
         )
 
@@ -1614,20 +1621,23 @@ def render_r_code_generator_page():
         if st.button("Generate Template", type="primary", use_container_width=True):
             with st.spinner("Generating code..."):
                 try:
-                    suggestion = generator.generate_template(template_type, params)
+                    suggestion = generator.generate_template(template_type, params, language=lang_code)
 
-                    st.success(f"✓ Generated! (Confidence: {suggestion.confidence:.0%})")
+                    st.success(f"✓ Generated {language} code! (Confidence: {suggestion.confidence:.0%})")
                     st.markdown(f"**Explanation:** {suggestion.explanation}")
                     if suggestion.context:
                         st.caption(suggestion.context)
 
-                    st.code(suggestion.code, language="r")
+                    # Display code with appropriate syntax highlighting
+                    display_lang = "python" if lang_code == "python" else "r"
+                    st.code(suggestion.code, language=display_lang)
 
-                    # Download button
+                    # Download button with appropriate file extension
+                    file_ext = ".py" if lang_code == "python" else ".R"
                     st.download_button(
-                        "Download R Script",
+                        f"Download {language} Script",
                         suggestion.code,
-                        file_name=f"{template_type}.R",
+                        file_name=f"{template_type}{file_ext}",
                         mime="text/plain"
                     )
 
