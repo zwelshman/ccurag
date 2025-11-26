@@ -12,6 +12,7 @@ from config import Config
 from github_indexer import GitHubIndexer
 from code_analyzer import CodeAnalyzer
 from hybrid_retriever import HybridRetriever
+from r_code_generator import RCodeGenerator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -1513,6 +1514,377 @@ def render_documentation_page():
         """)
 
 
+def render_r_code_generator_page():
+    """Render the R Code Generator page."""
+    st.title("🤖 AI Code Generator (R/dbplyr)")
+
+    st.markdown("""
+    Generate R code using dbplyr patterns inspired by the [BHFDSC standard-pipeline](https://github.com/BHFDSC/standard-pipeline).
+
+    **Features:**
+    - 📋 **Template Generation**: Create boilerplate code based on organizational patterns
+    - 💡 **Code Completion**: Context-aware code suggestions
+    - 🧪 **Test Generation**: Auto-create testthat tests for R functions
+    - 📝 **Documentation**: Generate roxygen2 documentation
+    - 🔧 **Refactoring**: Suggest code improvements
+    - 🔄 **Translation**: Convert Python/PySpark to R/dbplyr
+    """)
+
+    # Initialize code generator
+    try:
+        # Load components if available
+        analyzer = load_code_analyzer()
+        qa_system = load_qa_system()
+
+        # Get retriever if available
+        retriever = None
+        if qa_system and hasattr(qa_system, 'retriever'):
+            retriever = qa_system.retriever
+
+        # Initialize generator
+        generator = RCodeGenerator(
+            hybrid_retriever=retriever,
+            code_analyzer=analyzer
+        )
+
+        # Check if AI is available
+        has_ai = os.getenv("ANTHROPIC_API_KEY") is not None
+
+        if not has_ai:
+            st.warning("⚠️ ANTHROPIC_API_KEY not configured. Using template-based generation only.")
+
+    except Exception as e:
+        st.error(f"Failed to initialize code generator: {e}")
+        return
+
+    # Create tabs for different features
+    gen_tabs = st.tabs([
+        "📋 Templates",
+        "💡 Completion",
+        "🧪 Tests",
+        "📝 Documentation",
+        "🔧 Refactoring",
+        "🔄 Translation"
+    ])
+
+    # TAB 1: Template Generation
+    with gen_tabs[0]:
+        st.header("Generate Code Templates")
+        st.markdown("Create boilerplate R/dbplyr code based on standard patterns.")
+
+        template_type = st.selectbox(
+            "Select Template Type",
+            [
+                "cohort_pipeline",
+                "table_loader",
+                "demographics_join",
+                "codelist_filter",
+                "phenotyping_algorithm",
+                "data_quality_check",
+                "aggregate_with_privacy"
+            ],
+            format_func=lambda x: x.replace("_", " ").title()
+        )
+
+        st.markdown("### Template Parameters")
+
+        # Dynamic parameters based on template type
+        params = {}
+
+        if template_type == "cohort_pipeline":
+            params["pipeline_name"] = st.text_input("Pipeline Name", "My Cohort Study")
+            params["purpose"] = st.text_area("Purpose", "Describe what this pipeline does")
+            params["base_table"] = st.text_input("Base Table", "hds_curated_assets__demographics")
+            params["initial_filters"] = st.text_input("Initial Filters", "age >= 18 & !is.na(person_id)")
+            params["pipeline_steps"] = st.text_area("Pipeline Steps (dbplyr)", "filter(condition) %>%\n  select(columns)")
+            params["output_table"] = st.text_input("Output Table Name", "cohort_final")
+
+        elif template_type == "phenotyping_algorithm":
+            params["phenotype_name"] = st.text_input("Phenotype Name", "Type 2 Diabetes")
+            params["phenotype_id"] = st.text_input("Phenotype ID", "t2dm")
+            params["condition_description"] = st.text_area("Condition Description",
+                "type 2 diabetes mellitus based on diagnosis codes and prescriptions")
+
+        elif template_type == "codelist_filter":
+            params["codelist_path"] = st.text_input("Codelist File Path", "codelists/mi_codes.csv")
+            params["table_name"] = st.text_input("Table Name", "events")
+            params["code_column"] = st.text_input("Code Column", "diagnosis_code")
+            params["additional_filters"] = st.text_input("Additional Filters", "event_date >= '2020-01-01'")
+
+        if st.button("Generate Template", type="primary", use_container_width=True):
+            with st.spinner("Generating code..."):
+                try:
+                    suggestion = generator.generate_template(template_type, params)
+
+                    st.success(f"✓ Generated! (Confidence: {suggestion.confidence:.0%})")
+                    st.markdown(f"**Explanation:** {suggestion.explanation}")
+                    if suggestion.context:
+                        st.caption(suggestion.context)
+
+                    st.code(suggestion.code, language="r")
+
+                    # Download button
+                    st.download_button(
+                        "Download R Script",
+                        suggestion.code,
+                        file_name=f"{template_type}.R",
+                        mime="text/plain"
+                    )
+
+                except Exception as e:
+                    st.error(f"Generation failed: {e}")
+
+    # TAB 2: Code Completion
+    with gen_tabs[1]:
+        st.header("Code Completion Suggestions")
+        st.markdown("Get context-aware suggestions for your R/dbplyr code.")
+
+        code_context = st.text_area(
+            "Your Code (complete the last line)",
+            value="""library(dplyr)
+library(dbplyr)
+
+# Load demographics
+demographics <- tbl(con, "hds_curated_assets__demographics") %>%
+""",
+            height=200
+        )
+
+        if st.button("Get Suggestions", type="primary", use_container_width=True):
+            with st.spinner("Analyzing code and generating suggestions..."):
+                try:
+                    suggestions = generator.suggest_completion(code_context)
+
+                    if suggestions:
+                        st.success(f"✓ Found {len(suggestions)} suggestions")
+
+                        for i, sugg in enumerate(suggestions, 1):
+                            with st.expander(f"Suggestion {i}: {sugg.explanation} (confidence: {sugg.confidence:.0%})"):
+                                st.code(sugg.code, language="r")
+                                if sugg.context:
+                                    st.caption(f"Context: {sugg.context}")
+                    else:
+                        st.info("No suggestions found. Try adding more context.")
+
+                except Exception as e:
+                    st.error(f"Failed to get suggestions: {e}")
+
+    # TAB 3: Test Generation
+    with gen_tabs[2]:
+        st.header("Generate Tests")
+        st.markdown("Auto-create testthat test cases for your R functions.")
+
+        function_code = st.text_area(
+            "R Function to Test",
+            value="""calculate_age <- function(date_of_birth, reference_date = Sys.Date()) {
+  # Calculate age in years
+  age_years <- as.numeric(difftime(reference_date, date_of_birth, units = "days")) / 365.25
+  floor(age_years)
+}""",
+            height=200
+        )
+
+        function_name = st.text_input("Function Name (leave blank to auto-detect)", "")
+
+        if st.button("Generate Tests", type="primary", use_container_width=True):
+            with st.spinner("Generating tests..."):
+                try:
+                    suggestion = generator.generate_tests(
+                        function_code,
+                        function_name if function_name else None
+                    )
+
+                    if suggestion.code:
+                        st.success(f"✓ Tests generated! (Confidence: {suggestion.confidence:.0%})")
+                        st.markdown(f"**{suggestion.explanation}**")
+
+                        st.code(suggestion.code, language="r")
+
+                        st.download_button(
+                            "Download Test File",
+                            suggestion.code,
+                            file_name="test_functions.R",
+                            mime="text/plain"
+                        )
+                    else:
+                        st.error(suggestion.explanation)
+
+                except Exception as e:
+                    st.error(f"Test generation failed: {e}")
+
+    # TAB 4: Documentation Generation
+    with gen_tabs[3]:
+        st.header("Generate Documentation")
+        st.markdown("Create roxygen2 documentation or README files.")
+
+        doc_type = st.radio("Documentation Type", ["function", "readme", "file"])
+
+        code_to_document = st.text_area(
+            "Code to Document",
+            value="""load_and_filter_events <- function(con, person_ids, event_type, start_date = NULL, end_date = NULL) {
+  events <- tbl(con, "clinical_events") %>%
+    filter(person_id %in% !!person_ids)
+
+  if (!is.null(event_type)) {
+    events <- events %>% filter(type == !!event_type)
+  }
+
+  if (!is.null(start_date)) {
+    events <- events %>% filter(event_date >= !!start_date)
+  }
+
+  return(events)
+}""",
+            height=250
+        )
+
+        if st.button("Generate Documentation", type="primary", use_container_width=True):
+            with st.spinner("Generating documentation..."):
+                try:
+                    suggestion = generator.generate_documentation(code_to_document, doc_type)
+
+                    if suggestion.code:
+                        st.success(f"✓ Documentation generated! (Confidence: {suggestion.confidence:.0%})")
+                        st.markdown(f"**{suggestion.explanation}**")
+
+                        if doc_type == "readme":
+                            st.markdown(suggestion.code)
+                            st.code(suggestion.code, language="markdown")
+                        else:
+                            st.code(suggestion.code, language="r")
+
+                        file_ext = ".md" if doc_type == "readme" else ".R"
+                        st.download_button(
+                            "Download Documentation",
+                            suggestion.code,
+                            file_name=f"documentation{file_ext}",
+                            mime="text/plain"
+                        )
+                    else:
+                        st.error(suggestion.explanation)
+
+                except Exception as e:
+                    st.error(f"Documentation generation failed: {e}")
+
+    # TAB 5: Refactoring Suggestions
+    with gen_tabs[4]:
+        st.header("Refactoring Suggestions")
+        st.markdown("Get suggestions to improve your R/dbplyr code.")
+
+        code_to_refactor = st.text_area(
+            "Code to Refactor",
+            value="""# Load and process data
+data <- tbl(con, "large_table") %>%
+  filter(year == 2023) %>%
+  mutate(age_group = case_when(
+    age < 18 ~ "child",
+    age >= 18 & age < 65 ~ "adult",
+    age >= 65 ~ "senior"
+  )) %>%
+  collect()  # Loads everything into memory
+
+# Process in R
+result <- data %>%
+  group_by(age_group) %>%
+  summarise(count = n(), avg_value = mean(value))""",
+            height=250
+        )
+
+        focus = st.selectbox("Focus Area", ["General", "performance", "readability", "dbplyr"])
+        focus_param = None if focus == "General" else focus.lower()
+
+        if st.button("Get Refactoring Suggestions", type="primary", use_container_width=True):
+            with st.spinner("Analyzing code..."):
+                try:
+                    suggestions = generator.suggest_refactoring(code_to_refactor, focus_param)
+
+                    if suggestions:
+                        st.success(f"✓ Found {len(suggestions)} refactoring suggestions")
+
+                        for i, sugg in enumerate(suggestions, 1):
+                            with st.expander(f"Suggestion {i}: {sugg.explanation[:100]}... (confidence: {sugg.confidence:.0%})"):
+                                st.markdown(f"**{sugg.explanation}**")
+                                if sugg.context:
+                                    st.caption(f"Context: {sugg.context}")
+                                st.code(sugg.code, language="r")
+                    else:
+                        st.info("No refactoring suggestions found.")
+
+                except Exception as e:
+                    st.error(f"Refactoring analysis failed: {e}")
+
+    # TAB 6: Python to R Translation
+    with gen_tabs[5]:
+        st.header("Translate Python to R")
+        st.markdown("Convert Python/PySpark code from standard-pipeline to R/dbplyr.")
+
+        python_code = st.text_area(
+            "Python/PySpark Code",
+            value="""def load_table(spark, table_name, archive_date=None):
+    '''Load and optionally filter by archive date.'''
+    df = spark.table(table_name)
+
+    if archive_date is not None:
+        df = df.filter(f.col('archive_date') == archive_date)
+
+    # Standardize column names
+    for col in df.columns:
+        df = df.withColumnRenamed(col, col.lower().replace(' ', '_'))
+
+    return df""",
+            height=250
+        )
+
+        if st.button("Translate to R", type="primary", use_container_width=True):
+            with st.spinner("Translating code..."):
+                try:
+                    suggestion = generator.translate_python_to_r(python_code)
+
+                    if suggestion.code:
+                        st.success(f"✓ Translation complete! (Confidence: {suggestion.confidence:.0%})")
+                        st.markdown(f"**{suggestion.explanation}**")
+                        if suggestion.context:
+                            st.info(suggestion.context)
+
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown("**Original Python:**")
+                            st.code(python_code, language="python")
+                        with col2:
+                            st.markdown("**Translated R:**")
+                            st.code(suggestion.code, language="r")
+
+                        st.download_button(
+                            "Download R Translation",
+                            suggestion.code,
+                            file_name="translated.R",
+                            mime="text/plain"
+                        )
+                    else:
+                        st.error(suggestion.explanation)
+
+                except Exception as e:
+                    st.error(f"Translation failed: {e}")
+
+    # Learning Statistics (if available)
+    if analyzer:
+        with st.sidebar:
+            st.markdown("---")
+            st.subheader("📊 Learning Stats")
+
+            try:
+                stats = generator.learn_from_codebase()
+                st.metric("R Files Analyzed", stats.get('r_files_analyzed', 0))
+                st.metric("Repos with R", stats.get('total_repos_with_r', 0))
+
+                if stats.get('top_imports'):
+                    with st.expander("Top R Packages"):
+                        for pkg, count in list(stats['top_imports'].items())[:5]:
+                            st.text(f"{pkg}: {count}")
+            except:
+                pass
+
+
 def main():
     """Main application with page navigation."""
     # Sidebar navigation
@@ -1520,8 +1892,8 @@ def main():
         st.title("Navigation")
         page = st.radio(
             "Go to",
-            ["Q&A", "Code Intelligence", "Documentation", "Setup"],
-            index=0 if check_vector_store_exists() else 3,
+            ["Q&A", "Code Intelligence", "AI Code Gen", "Documentation", "Setup"],
+            index=0 if check_vector_store_exists() else 4,
         )
 
     # Render the selected page
@@ -1529,6 +1901,8 @@ def main():
         render_qa_page()
     elif page == "Code Intelligence":
         render_code_intelligence_page()
+    elif page == "AI Code Gen":
+        render_r_code_generator_page()
     elif page == "Documentation":
         render_documentation_page()
     elif page == "Setup":
