@@ -37,51 +37,12 @@ class Config:
     """Application configuration."""
 
     # API Keys
-    ANTHROPIC_API_KEY = get_secret("ANTHROPIC_API_KEY")
     GITHUB_TOKEN = get_secret("GITHUB_TOKEN")
-    PINECONE_API_KEY = get_secret("PINECONE_API_KEY")
 
     # GitHub Settings
     GITHUB_ORG = get_secret("GITHUB_ORG", "BHFDSC")
 
-    # Pinecone Settings
-    PINECONE_INDEX_NAME = get_secret("PINECONE_INDEX_NAME", "ccuindex")
-    PINECONE_CLOUD = get_secret("PINECONE_CLOUD", "aws")
-    PINECONE_REGION = get_secret("PINECONE_REGION", "us-east-1")
-    PINECONE_DIMENSION = 768
-
-    # Model Settings
-    ANTHROPIC_MODEL = "claude-sonnet-4-5"
-    EMBEDDING_MODEL = "BAAI/llm-embedder" 
-
-    # Document Processing
-    CHUNK_SIZE = 1000
-    CHUNK_OVERLAP = 200
-    TOP_K_CHUNKS = 20  # Number of chunks to retrieve for context window
-    MAX_FILES_PER_REPO = 75
-
-    # File types to index
+    # File types to index (code files only for static analysis)
     INDEXED_FILE_EXTENSIONS = [
-        ".md", ".py", ".r", ".R", ".ipynb", ".csv"
-        ".txt", ".rst", ".html", ".yaml", ".yml", ".json", ".sql"
+        ".py", ".r", ".R", ".sql"
     ]
-
-    # Hybrid Search Settings
-    USE_HYBRID_SEARCH = get_secret("USE_HYBRID_SEARCH", "true").lower() == "true"
-    BM25_WEIGHT = float(get_secret("BM25_WEIGHT", "0.4"))  # 40% BM25, 60% vector by default
-    USE_ADAPTIVE_WEIGHTS = get_secret("USE_ADAPTIVE_WEIGHTS", "true").lower() == "true"
-
-    @classmethod
-    def validate(cls):
-        """Validate required configuration."""
-        if not cls.ANTHROPIC_API_KEY:
-            raise ValueError(
-                "ANTHROPIC_API_KEY is required. "
-                "Set it in .env file or Streamlit secrets."
-            )
-        if not cls.PINECONE_API_KEY:
-            raise ValueError(
-                "PINECONE_API_KEY is required. "
-                "Set it in .env file or Streamlit secrets."
-            )
-        return True
