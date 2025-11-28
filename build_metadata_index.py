@@ -27,8 +27,12 @@ def main(force_rebuild: bool = False):
     """
     logger.info("Starting metadata index build...")
 
-    # Validate config
-    Config.validate()
+    # Validate required config for code intelligence (no API keys needed!)
+    if not Config.GITHUB_TOKEN:
+        raise ValueError(
+            "GITHUB_TOKEN is required to fetch repositories. "
+            "Set it in .env file or environment variables."
+        )
 
     # Initialize GitHub indexer
     logger.info(f"Fetching repositories from {Config.GITHUB_ORG}...")
