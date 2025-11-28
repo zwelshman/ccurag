@@ -14,7 +14,6 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 import json
 import os
-from cloud_storage import CloudStorage
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -83,9 +82,6 @@ class CodeAnalyzer:
         self.data_index_dir = "data_index"
         self.metadata_cache_file = os.path.join(cache_dir, "code_metadata.json")
         self.metadata_data_index_file = os.path.join(self.data_index_dir, "code_metadata.json")
-
-        # Initialize cloud storage
-        self.storage = CloudStorage()
 
         # Metadata storage: repo -> file -> CodeMetadata
         self.metadata: Dict[str, Dict[str, CodeMetadata]] = defaultdict(dict)
@@ -724,7 +720,11 @@ class CodeAnalyzer:
                 "module_to_files": dict(self.module_to_files),
             }
 
-            self.storage.save_json(serializable_data, self.metadata_cache_file)
+            # Save to JSON file
+            os.makedirs(os.path.dirname(self.metadata_cache_file), exist_ok=True)
+            with open(self.metadata_cache_file, 'w') as f:
+                json.dump(serializable_data, f, indent=2)
+            logger.info(f"✓ Saved metadata cache: {self.metadata_cache_file}")
         except Exception as e:
             logger.warning(f"Failed to save metadata cache: {e}")
 
@@ -732,10 +732,10 @@ class CodeAnalyzer:
         """Load metadata from cache file - checks data_index first, then .cache."""
         # Try data_index first (committed files)
         cache_file = None
-        if self.storage.exists(self.metadata_data_index_file):
+        if os.path.exists(self.metadata_data_index_file):
             cache_file = self.metadata_data_index_file
             source = "data_index"
-        elif self.storage.exists(self.metadata_cache_file):
+        elif os.path.exists(self.metadata_cache_file):
             cache_file = self.metadata_cache_file
             source = "cache"
 
@@ -744,7 +744,9 @@ class CodeAnalyzer:
 
         try:
             logger.info(f"Loading metadata from {source}...")
-            data = self.storage.load_json(cache_file)
+            with open(cache_file, 'r') as f:
+                data = json.load(f)
+            logger.info(f"✓ Loaded metadata from {source}")
 
             # Restore metadata
             self.metadata = defaultdict(dict)
@@ -782,11 +784,11 @@ class CodeAnalyzer:
     def clear_cache(self):
         """Clear the metadata cache from both .cache and data_index."""
         cleared = False
-        if self.storage.exists(self.metadata_cache_file):
-            self.storage.delete(self.metadata_cache_file)
+        if os.path.exists(self.metadata_cache_file):
+            os.remove(self.metadata_cache_file)
             cleared = True
-        if self.storage.exists(self.metadata_data_index_file):
-            self.storage.delete(self.metadata_data_index_file)
+        if os.path.exists(self.metadata_data_index_file):
+            os.remove(self.metadata_data_index_file)
             cleared = True
         if cleared:
             logger.info("✓ Metadata cache cleared")
