@@ -338,6 +338,295 @@ def render_module_usage_tab(analyzer):
                             st.caption(f"Import: {file_info['import']}")
 
 
+def render_documentation_tab():
+    """Render the documentation tab explaining architecture and processing."""
+    st.header("📚 How It Works")
+
+    st.markdown("""
+    This app uses **static code analysis** to extract organizational intelligence from the BHFDSC codebase.
+    It provides instant, deterministic queries without requiring LLMs or API calls.
+    """)
+
+    # Architecture section
+    st.subheader("🏗️ Architecture")
+
+    st.markdown("""
+    ### System Overview
+
+    ```
+    GitHub Repositories
+           ↓
+    [1] Fetch Code Files (.py, .R, .sql)
+           ↓
+    [2] Parse with AST/Regex
+           ↓
+    [3] Extract Metadata
+           ↓
+    [4] Build Indices
+           ↓
+    [5] Cache to JSON
+           ↓
+    [6] Query Interface (this app)
+    ```
+    """)
+
+    st.divider()
+
+    # Processing steps
+    st.subheader("⚙️ Processing Steps")
+
+    with st.expander("**Step 1: Repository Fetching**", expanded=True):
+        st.markdown("""
+        - Connects to GitHub API using personal access token
+        - Fetches all repositories from BHFDSC organization
+        - Downloads relevant code files:
+          - Python files (`.py`)
+          - R files (`.R`)
+          - SQL files (`.sql`)
+        - Filters out non-code files (images, binaries, etc.)
+        """)
+
+    with st.expander("**Step 2: Static Code Parsing**"):
+        st.markdown("""
+        **Python Analysis** (using AST - Abstract Syntax Tree):
+        - Parse files into syntax tree using Python's `ast` module
+        - Walk through all nodes to find:
+          - Function calls (e.g., `analyzer.get_table_usage()`)
+          - Import statements (e.g., `import pandas as pd`)
+          - String literals containing SQL queries
+          - Table references in SQL strings
+
+        **R Analysis** (using regex patterns):
+        - Extract function calls from R code
+        - Identify `library()` and `require()` calls
+        - Find dplyr/dbplyr table references (e.g., `tbl(con, "table_name")`)
+
+        **SQL Analysis** (using regex patterns):
+        - Extract table names from FROM clauses
+        - Extract table names from JOIN clauses
+        - Handle schema-qualified names (e.g., `schema.table`)
+        """)
+
+    with st.expander("**Step 3: Metadata Extraction**"):
+        st.markdown("""
+        For each file, we extract:
+
+        **Tables Referenced:**
+        - All HDS curated assets (e.g., `hds_curated_assets__demographics`)
+        - Custom table patterns
+        - Tracks which files/repos use which tables
+
+        **Function Calls:**
+        - All function invocations
+        - Special tracking for HDS functions
+        - Patterns like `hds_*`, `curate_*`, `phenotype_*`
+
+        **Module Imports:**
+        - Python: `import` and `from ... import` statements
+        - R: `library()` and `require()` calls
+        - Tracks dependency usage across projects
+
+        **File Classification:**
+        - Curation scripts (data processing)
+        - Analysis scripts (statistical analysis)
+        - Phenotyping scripts (disease definition)
+        - Utility scripts (helper functions)
+        """)
+
+    with st.expander("**Step 4: Index Building**"):
+        st.markdown("""
+        Creates reverse indices for fast lookups:
+
+        ```python
+        # Table → Repos mapping
+        {
+            "hds_curated_assets__demographics": [
+                "repo1", "repo2", ...
+            ]
+        }
+
+        # Function → Files mapping
+        {
+            "hds_functions.curate_data": [
+                {"repo": "repo1", "file": "script.py"},
+                ...
+            ]
+        }
+
+        # Module → Usage mapping
+        {
+            "pandas": {
+                "repos": ["repo1", "repo2"],
+                "files": [...]
+            }
+        }
+        ```
+
+        These indices enable O(1) lookup time for queries.
+        """)
+
+    with st.expander("**Step 5: Caching**"):
+        st.markdown("""
+        **Storage Locations:**
+        - Runtime cache: `.cache/code_metadata.json` (not committed to Git)
+        - Persistent cache: `data_index/code_metadata.json` (committed to Git)
+
+        **Cache Format:** JSON with structure:
+        ```json
+        {
+            "files": [...],
+            "repos": [...],
+            "tables": {...},
+            "functions": {...},
+            "modules": {...},
+            "metadata": {
+                "last_updated": "2024-01-15",
+                "total_files": 450
+            }
+        }
+        ```
+
+        **Benefits:**
+        - No need to re-parse on every app restart
+        - Instant loading (<1 second)
+        - Can be shared via Git
+        - Typical size: 5-20 MB
+        """)
+
+    st.divider()
+
+    # Technical details
+    st.subheader("🔧 Technical Details")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("""
+        **Python AST Example:**
+        ```python
+        import ast
+
+        code = '''
+        df = spark.table("hds_curated_assets__demographics")
+        '''
+
+        tree = ast.parse(code)
+        # Walk nodes to find table name
+        # → Extracts "hds_curated_assets__demographics"
+        ```
+
+        **Benefits:**
+        - Accurate parsing (no false positives)
+        - Handles complex code structures
+        - Extracts context (line numbers, function scope)
+        """)
+
+    with col2:
+        st.markdown("""
+        **SQL Regex Example:**
+        ```sql
+        SELECT *
+        FROM hds_curated_assets__deaths_single d
+        JOIN hds_curated_assets__demographics demo
+          ON d.person_id = demo.person_id
+        ```
+
+        **Extraction:**
+        - FROM clause → `hds_curated_assets__deaths_single`
+        - JOIN clause → `hds_curated_assets__demographics`
+        - Handles aliases (d, demo)
+        """)
+
+    st.divider()
+
+    # Performance metrics
+    st.subheader("⚡ Performance")
+
+    metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
+
+    with metrics_col1:
+        st.metric("Metadata Build Time", "10-30 min", help="One-time indexing of all repos")
+
+    with metrics_col2:
+        st.metric("Query Response Time", "<100 ms", help="Dictionary lookup, no API calls")
+
+    with metrics_col3:
+        st.metric("Cache Size", "5-20 MB", help="Compressed JSON with all metadata")
+
+    st.divider()
+
+    # Tracked assets
+    st.subheader("📋 Tracked HDS Curated Assets")
+
+    st.markdown("""
+    The system specifically tracks these HDS curated asset tables:
+
+    **Demographics:**
+    - `hds_curated_assets__demographics`
+    - `hds_curated_assets__date_of_birth_*`
+    - `hds_curated_assets__ethnicity_*`
+    - `hds_curated_assets__sex_*`
+    - `hds_curated_assets__lsoa_*`
+
+    **Health Outcomes:**
+    - `hds_curated_assets__covid_positive`
+    - `hds_curated_assets__deaths_single`
+    - `hds_curated_assets__deaths_cause_of_death`
+
+    **Hospital Episodes (HES):**
+    - `hds_curated_assets__hes_apc_*` (multiple variants)
+
+    *See `code_analyzer.py` for the complete list of tracked tables.*
+    """)
+
+    st.divider()
+
+    # Use cases
+    st.subheader("💡 Use Cases")
+
+    use_case_col1, use_case_col2 = st.columns(2)
+
+    with use_case_col1:
+        st.markdown("""
+        **For Data Scientists:**
+        - Find repos using specific data tables
+        - Discover existing phenotyping algorithms
+        - See how others handle similar analyses
+        - Identify code reuse opportunities
+        """)
+
+    with use_case_col2:
+        st.markdown("""
+        **For Team Leads:**
+        - Track adoption of standardized assets
+        - Identify code duplication
+        - Understand cross-project dependencies
+        - Plan data governance strategies
+        """)
+
+    st.divider()
+
+    # Limitations
+    st.subheader("⚠️ Limitations")
+
+    st.markdown("""
+    **What it CAN do:**
+    - ✅ Find exact table/function references in code
+    - ✅ Track imports and dependencies
+    - ✅ Provide instant, deterministic results
+    - ✅ Work offline (after initial build)
+
+    **What it CANNOT do:**
+    - ❌ Understand runtime behavior or dynamic queries
+    - ❌ Answer semantic questions (use Q&A app for that)
+    - ❌ Detect tables built from variables (e.g., `table_name = f"prefix_{suffix}"`)
+    - ❌ Analyze code execution or data flow
+
+    **Complementary Tool:** For semantic questions like "What is the methodology behind X?",
+    use the main Q&A app which uses LLMs and vector search.
+    """)
+
+
 def render_cross_analysis_tab(analyzer):
     """Render the cross-analysis tab."""
     st.header("Cross-Dataset Analysis")
@@ -452,7 +741,8 @@ def main():
         "📁 Table Usage",
         "⚙️ Function Usage",
         "📦 Module Usage",
-        "🔗 Cross-Analysis"
+        "🔗 Cross-Analysis",
+        "📚 How It Works"
     ])
 
     with tabs[0]:
@@ -469,6 +759,9 @@ def main():
 
     with tabs[4]:
         render_cross_analysis_tab(analyzer)
+
+    with tabs[5]:
+        render_documentation_tab()
 
 
 if __name__ == "__main__":
