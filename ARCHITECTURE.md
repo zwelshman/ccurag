@@ -8,16 +8,14 @@
 - [Technologies & Tools](#technologies--tools)
 - [RAG Implementation](#rag-implementation)
 - [Hybrid Search Explained](#hybrid-search-explained)
-- [Code Intelligence](#code-intelligence)
 - [Storage & Persistence](#storage--persistence)
 - [Performance Considerations](#performance-considerations)
 
 ## Overview
 
-This is a **hybrid RAG (Retrieval-Augmented Generation) system** combined with **static code analysis** designed specifically for code repositories. It provides two complementary capabilities:
+This is a **hybrid RAG (Retrieval-Augmented Generation) system** designed specifically for code repositories. It provides:
 
-1. **Conversational Q&A**: Natural language questions about repositories answered using AI
-2. **Code Intelligence**: Deterministic queries about code structure, dependencies, and patterns
+**Conversational Q&A**: Natural language questions about repositories answered using AI with hybrid search combining BM25 keyword matching and vector semantic search
 
 ### Key Features
 
@@ -35,22 +33,22 @@ This is a **hybrid RAG (Retrieval-Augmented Generation) system** combined with *
 ┌─────────────────────────────────────────────────────────────────┐
 │                         User Interface                          │
 │                      (Streamlit Web App)                        │
-└────────────┬────────────────────────────────────┬───────────────┘
-             │                                    │
-             ▼                                    ▼
-    ┌────────────────┐                  ┌─────────────────┐
-    │   Q&A System   │                  │ Code Intelligence│
-    │  (RAG-based)   │                  │   (Static AST)  │
-    └────────┬───────┘                  └────────┬────────┘
-             │                                    │
-             ▼                                    ▼
-    ┌─────────────────┐                 ┌──────────────────┐
-    │ Hybrid Retriever│                 │  Code Metadata   │
-    │  BM25 + Vector  │                 │  Cache (.json)   │
-    └────────┬────────┘                 └──────────────────┘
-             │
-             ├──────────────┬─────────────┐
-             ▼              ▼             ▼
+└──────────────────────────┬──────────────────────────────────────┘
+                           │
+                           ▼
+                  ┌────────────────┐
+                  │   Q&A System   │
+                  │  (RAG-based)   │
+                  └────────┬───────┘
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │ Hybrid Retriever│
+                  │  BM25 + Vector  │
+                  └────────┬────────┘
+                           │
+             ┌─────────────┼─────────────┐
+             ▼             ▼             ▼
     ┌──────────────┐  ┌─────────┐  ┌──────────────┐
     │   BM25 Index │  │ Pinecone│  │  Anthropic   │
     │  (keyword)   │  │ (vector)│  │Claude (LLM)  │
@@ -64,12 +62,7 @@ This is a **hybrid RAG (Retrieval-Augmented Generation) system** combined with *
 │  GitHub  │─────→│ Indexer      │─────→│ Vector     │
 │   API    │      │ (fetch+parse)│      │ Store      │
 └──────────┘      └──────────────┘      └────────────┘
-                         │                     │
-                         ▼                     │
-                  ┌──────────────┐            │
-                  │ Code Analyzer│            │
-                  │ (AST parser) │            │
-                  └──────────────┘            │
+                                              │
                                               ▼
 ┌──────────┐      ┌──────────────┐      ┌────────────┐
 │  User    │─────→│ Hybrid       │─────→│ Anthropic  │
@@ -108,7 +101,6 @@ class GitHubIndexer:
 **Configuration**:
 - `GITHUB_TOKEN`: Optional, increases rate limit from 60/hr to 5000/hr
 - `GITHUB_ORG`: Organization name (default: BHFDSC)
-- `MAX_FILES_PER_REPO`: Limit files per repo (default: 75)
 
 ### 2. Vector Store (`vector_store_pinecone.py`)
 
@@ -219,54 +211,7 @@ class QASystem:
 - Answer type classification
 - Limitation indicators
 
-### 5. Code Analyzer (`code_analyzer.py`)
-
-**Purpose**: Extract structured metadata from code files using static analysis.
-
-**Key Responsibilities**:
-- Parse Python code with AST
-- Parse R code with regex patterns
-- Extract SQL table references
-- Build reverse indices (table → repos, function → repos)
-- Classify files by type
-
-**Implementation Details**:
-```python
-class CodeAnalyzer:
-    - analyze_repository(repo): Parse all files in a repo
-    - _analyze_python_file(file_path): AST-based Python parsing
-    - _analyze_r_file(file_path): Regex-based R parsing
-    - _extract_table_references(file_content): Find HDS tables
-    - get_table_usage(table_name): Query table usage
-    - get_function_usage(pattern): Query function usage
-    - find_similar_projects(query, hybrid_retriever): Semantic clustering
-```
-
-**Tracked Entities**:
-- **Tables**: HDS curated assets (demographics, COVID, deaths, HES)
-- **Functions**: Any function imported or called
-- **Modules**: Python/R library imports
-- **File Types**: Curation, analysis, phenotyping, etc.
-
-**Metadata Schema**:
-```json
-{
-  "repo_name": {
-    "files": [
-      {
-        "file": "path/to/file.py",
-        "type": "python",
-        "imports": ["pandas", "hds_functions"],
-        "functions": ["curate_data", "validate_ids"],
-        "tables": ["hds_curated_assets__demographics"],
-        "file_type": "curation"
-      }
-    ]
-  }
-}
-```
-
-### 6. Local Storage (`cloud_storage.py`)
+### 5. Local Storage (`cloud_storage.py`)
 
 **Purpose**: Persist BM25 index and code metadata in local filesystem.
 
@@ -729,169 +674,6 @@ Multiple studies show hybrid search outperforms single methods:
 - **CodeSearchNet Benchmark**: Hybrid achieves 35.2% MRR vs. 28.4% BM25-only
 - **Industry Practice**: Elasticsearch, Pinecone, Weaviate all support hybrid search
 
-## Code Intelligence
-
-### Static Analysis vs. RAG
-
-**Complementary Approaches**:
-
-| Feature | RAG (Q&A) | Static Analysis (Code Intelligence) |
-|---------|-----------|-------------------------------------|
-| **Query Type** | Natural language | Structured queries |
-| **Response Time** | 1-3 seconds | <100ms |
-| **Accuracy** | High (depends on context) | Exact (deterministic) |
-| **Cost** | API calls ($0.01-0.05 per query) | Free (cached data) |
-| **Output** | Prose answer | Structured data (repos, files, lines) |
-| **Use Cases** | "How does X work?", "Why Y?" | "Which repos use table X?", "Show all uses of function Y" |
-
-**When to Use Each**:
-- **RAG**: Understanding concepts, comparing approaches, exploratory research
-- **Code Intelligence**: Dependency tracking, usage audits, impact analysis
-
-### AST-Based Parsing
-
-**What is AST (Abstract Syntax Tree)?**
-- Structured representation of code
-- Parsed by language compiler/interpreter
-- Exposes syntax elements (imports, functions, variables, etc.)
-
-**Python AST Example**:
-```python
-import ast
-
-code = """
-import pandas as pd
-from hds_functions import curate_data
-
-def process_data(df):
-    return curate_data(df)
-"""
-
-tree = ast.parse(code)
-
-# Extract imports
-for node in ast.walk(tree):
-    if isinstance(node, ast.Import):
-        print(f"Import: {node.names[0].name}")
-    elif isinstance(node, ast.ImportFrom):
-        print(f"From {node.module} import {node.names[0].name}")
-    elif isinstance(node, ast.FunctionDef):
-        print(f"Function: {node.name}")
-
-# Output:
-# Import: pandas
-# From hds_functions import curate_data
-# Function: process_data
-```
-
-**R Parsing** (Regex-based):
-```python
-import re
-
-r_code = """
-library(dplyr)
-source("hds_functions.R")
-
-process_data <- function(df) {
-  curate_data(df)
-}
-"""
-
-# Extract library imports
-libraries = re.findall(r'library\(([^)]+)\)', r_code)
-# Result: ['dplyr']
-
-# Extract source files
-sources = re.findall(r'source\(["\']([^"\']+)["\']\)', r_code)
-# Result: ['hds_functions.R']
-
-# Extract functions
-functions = re.findall(r'(\w+)\s*<-\s*function', r_code)
-# Result: ['process_data']
-```
-
-### Table Reference Extraction
-
-**SQL Table Pattern Matching**:
-```python
-def extract_table_references(file_content):
-    """Extract HDS curated asset table names."""
-
-    patterns = [
-        # SQL FROM clause
-        r'FROM\s+([a-z_]+\.[a-z_]+)',
-
-        # SQL JOIN clause
-        r'JOIN\s+([a-z_]+\.[a-z_]+)',
-
-        # Spark table references
-        r'spark\.table\(["\']([^"\']+)["\']\)',
-
-        # Python string literals with table names
-        r'["\']hds_curated_assets__[a-z_]+["\']',
-    ]
-
-    tables = set()
-    for pattern in patterns:
-        matches = re.findall(pattern, file_content, re.IGNORECASE)
-        tables.update(matches)
-
-    # Filter to only tracked HDS tables
-    tracked_tables = {
-        'hds_curated_assets__demographics',
-        'hds_curated_assets__covid_positive',
-        'hds_curated_assets__deaths_single',
-        # ... more tables
-    }
-
-    return tables & tracked_tables
-```
-
-**Example**:
-```python
-sql = """
-SELECT * FROM hds_curated_assets.demographics d
-JOIN hds_curated_assets.covid_positive c
-  ON d.person_id = c.person_id
-"""
-
-tables = extract_table_references(sql)
-# Result: {'hds_curated_assets__demographics', 'hds_curated_assets__covid_positive'}
-```
-
-### Reverse Indexing
-
-**Purpose**: Enable fast lookup from entity to repos/files.
-
-**Index Structure**:
-```python
-{
-    "table_usage": {
-        "hds_curated_assets__demographics": {
-            "repos": ["repo1", "repo2"],
-            "files": [
-                {"repo": "repo1", "file": "analysis/demographics.py", "line": 42},
-                {"repo": "repo2", "file": "curation/curate.R", "line": 156}
-            ]
-        }
-    },
-    "function_usage": {
-        "hds_functions.curate_data": {
-            "repos": ["repo1", "repo3"],
-            "files": [...]
-        }
-    },
-    "module_usage": {
-        "pandas": {
-            "repos": ["repo1", "repo2", "repo4"],
-            "files": [...]
-        }
-    }
-}
-```
-
-**Lookup Performance**: O(1) hash lookup, <10ms for any query
-
 ## Storage & Persistence
 
 ### Pinecone (Cloud Vector Database)
@@ -982,12 +764,6 @@ Check for committed cache (data_index/)
 def load_qa_system():
     """Load QA system once, reuse across requests."""
     return QASystem(vector_store, retriever)
-
-@st.cache_resource
-def load_code_analyzer():
-    """Load code analyzer once, reuse across requests."""
-    return CodeAnalyzer()
-```
 
 **2. Batch Processing**:
 ```python

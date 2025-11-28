@@ -58,7 +58,6 @@ class Config:
     CHUNK_SIZE = 1000
     CHUNK_OVERLAP = 200
     TOP_K_CHUNKS = 20  # Number of chunks to retrieve for context window
-    MAX_FILES_PER_REPO = 75
 
     # File types to index
     INDEXED_FILE_EXTENSIONS = [

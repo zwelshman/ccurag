@@ -80,10 +80,9 @@ class GitHubIndexer:
                 logger.warning(f"No README found for {repo_full_name}")
 
             # Get other files
-            file_count = 0
             contents = repo.get_contents("")
 
-            while contents and file_count < Config.MAX_FILES_PER_REPO:
+            while contents:
                 try:
                     file_content = contents.pop(0)
 
@@ -108,7 +107,6 @@ class GitHubIndexer:
                                         "path": file_content.path,
                                     }
                                 })
-                                file_count += 1
                             except (UnicodeDecodeError, GithubException):
                                 continue
 
