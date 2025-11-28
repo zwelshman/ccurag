@@ -6,7 +6,6 @@ import os
 import pandas as pd
 import plotly.express as px
 from code_analyzer import CodeAnalyzer
-from config import Config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
