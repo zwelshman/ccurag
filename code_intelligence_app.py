@@ -47,12 +47,8 @@ def render_metadata_management():
     with st.expander("⚙️ Code Metadata Configuration", expanded=False):
         st.markdown(
             """
-            **Code Intelligence analyzes Python, R, and SQL files to extract structured metadata.**
-
-            - **Table Usage**: Track HDS curated assets usage across projects
-            - **Function Analysis**: Identify standardized function usage
-            - **Module Imports**: See which libraries are used where
-            - **Semantic Clustering**: Find similar algorithms and code patterns
+            Analyzes Python, R, and SQL files to extract structured metadata:
+            table usage, function calls, and module imports.
             """
         )
 
@@ -118,11 +114,7 @@ def render_metadata_management():
                         st.error(f"Error clearing cache: {e}")
 
         st.divider()
-        st.caption("""
-        **Storage**: Metadata is cached locally in `.cache/code_metadata.json`.
-        For committed storage, copy to `data_index/code_metadata.json` and commit to Git.
-        The app automatically checks both locations.
-        """)
+        st.caption("Metadata cached in `.cache/code_metadata.json` or `data_index/code_metadata.json`")
 
 
 def render_dashboard_tab(analyzer, stats):
@@ -171,7 +163,6 @@ def render_dashboard_tab(analyzer, stats):
 def render_table_usage_tab(analyzer):
     """Render the table usage explorer tab."""
     st.header("Table Dependency Tracker")
-    st.markdown("Find which repositories use specific HDS curated asset tables.")
 
     # Group tables by category
     demographics_tables = [
@@ -261,7 +252,6 @@ def render_table_usage_tab(analyzer):
 def render_function_usage_tab(analyzer):
     """Render the function usage tracker tab."""
     st.header("Function Usage Tracker")
-    st.markdown("Track which repositories use HDS functions and standardized code.")
 
     # Search box
     function_pattern = st.text_input(
@@ -312,7 +302,6 @@ def render_function_usage_tab(analyzer):
 def render_module_usage_tab(analyzer):
     """Render the module usage tracker tab."""
     st.header("Module Usage Tracker")
-    st.markdown("Track which repositories import specific Python modules (e.g., hds_functions).")
 
     # Search box
     module_name = st.text_input(
@@ -352,7 +341,6 @@ def render_module_usage_tab(analyzer):
 def render_cross_analysis_tab(analyzer):
     """Render the cross-analysis tab."""
     st.header("Cross-Dataset Analysis")
-    st.markdown("Find repositories that use multiple data sources together.")
 
     # Predefined cross-analyses
     st.subheader("Common Combinations")
@@ -429,13 +417,6 @@ def main():
     """Main application."""
     st.title("🧠 BHFDSC Code Intelligence Dashboard")
 
-    st.markdown(
-        """
-        Explore organizational intelligence about the BHFDSC codebase through static code analysis.
-        Track table usage, function dependencies, and discover similar projects.
-        """
-    )
-
     # Metadata management section
     render_metadata_management()
 
@@ -444,14 +425,7 @@ def main():
     # Check if metadata exists
     if not check_metadata_exists():
         st.error("⚠️ Metadata index not found!")
-        st.info(
-            """
-            The code metadata hasn't been built yet.
-
-            Use the **Code Metadata Configuration** panel above to build the metadata index.
-            This will parse all Python, R, and SQL files to extract structured metadata.
-            """
-        )
+        st.info("Use the **Code Metadata Configuration** panel above to build the metadata index.")
         st.stop()
 
     # Load analyzer
@@ -466,20 +440,6 @@ def main():
 
     # Sidebar with summary info
     with st.sidebar:
-        st.header("About")
-        st.markdown(
-            """
-            **Code Intelligence** provides static analysis of BHFDSC repositories:
-
-            - Track HDS curated asset usage
-            - Find function dependencies
-            - Analyze module imports
-            - Discover cross-dataset usage
-            """
-        )
-
-        st.divider()
-
         st.header("Quick Stats")
         st.metric("Repositories", stats['total_repos'])
         st.metric("Files Analyzed", stats['total_files'])
