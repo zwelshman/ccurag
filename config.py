@@ -44,5 +44,5 @@ class Config:
 
     # File types to index (code files only for static analysis)
     INDEXED_FILE_EXTENSIONS = [
-        ".py", ".r", ".R", ".sql"
+        ".py", ".r", ".R", ".sql", ".ipynb"
     ]

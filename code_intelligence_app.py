@@ -47,7 +47,7 @@ def render_metadata_management():
     with st.expander("⚙️ Code Metadata Configuration", expanded=False):
         st.markdown(
             """
-            Analyzes Python, R, and SQL files to extract structured metadata:
+            Analyzes Python, R, SQL, and Jupyter notebook files to extract structured metadata:
             table usage, function calls, and module imports.
             """
         )
@@ -381,6 +381,7 @@ def render_documentation_tab():
         - Fetches all repositories from BHFDSC organization
         - Downloads relevant code files:
           - Python files (`.py`)
+          - Jupyter notebooks (`.ipynb`)
           - R files (`.R`)
           - SQL files (`.sql`)
         - Filters out non-code files (images, binaries, etc.)
@@ -395,6 +396,12 @@ def render_documentation_tab():
           - Import statements (e.g., `import pandas as pd`)
           - String literals containing SQL queries
           - Table references in SQL strings
+
+        **Jupyter Notebook Analysis** (JSON parsing + AST):
+        - Parse `.ipynb` JSON structure
+        - Extract code from all code cells
+        - Combine cells and analyze as Python code
+        - Preserves all imports, function calls, and table references
 
         **R Analysis** (using regex patterns):
         - Extract function calls from R code

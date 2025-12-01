@@ -111,6 +111,18 @@ class CodeAnalyzer:
         # Determine language
         language = self._detect_language(file_path)
 
+        # Extract code from Jupyter notebooks
+        if file_path.endswith('.ipynb'):
+            content = self._extract_notebook_code(content)
+            if content is None:
+                # Failed to parse notebook, return empty metadata
+                return CodeMetadata(
+                    file_path=file_path,
+                    repo=repo,
+                    language=language,
+                    content=""
+                )
+
         metadata = CodeMetadata(
             file_path=file_path,
             repo=repo,
@@ -131,6 +143,40 @@ class CodeAnalyzer:
             metadata.imports, metadata.function_calls = self._parse_r_code(content)
 
         return metadata
+
+    def _extract_notebook_code(self, notebook_content: str) -> Optional[str]:
+        """Extract Python code from Jupyter notebook JSON.
+
+        Args:
+            notebook_content: Raw JSON content of .ipynb file
+
+        Returns:
+            Concatenated code from all code cells, or None if parsing fails
+        """
+        try:
+            notebook = json.loads(notebook_content)
+            code_cells = []
+
+            # Extract code from cells
+            for cell in notebook.get('cells', []):
+                if cell.get('cell_type') == 'code':
+                    # Cell source can be a string or list of strings
+                    source = cell.get('source', [])
+                    if isinstance(source, list):
+                        code = ''.join(source)
+                    else:
+                        code = source
+
+                    if code.strip():  # Only add non-empty code
+                        code_cells.append(code)
+
+            # Combine all code cells with newlines
+            combined_code = '\n\n'.join(code_cells)
+            return combined_code if combined_code.strip() else ""
+
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            logger.warning(f"Failed to parse Jupyter notebook: {e}")
+            return None
 
     def _detect_language(self, file_path: str) -> str:
         """Detect programming language from file extension."""
