@@ -409,16 +409,6 @@ def render_dashboard_tab(analyzer, stats):
             for repo in usage['repos']:
                 st.markdown(f"- `{repo}`")
 
-            st.divider()
-
-            # Files by type
-            st.subheader("Files by Type")
-            for file_type, files in usage['files_by_type'].items():
-                with st.expander(f"{file_type.capitalize()} ({len(files)} files)"):
-                    for file_info in files:
-                        st.markdown(f"**{file_info['repo']}**")
-                        st.code(file_info['file'], language="text")
-
 
 def render_function_usage_tab(analyzer):
     """Render the function usage tracker tab."""
