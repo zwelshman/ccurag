@@ -256,10 +256,10 @@ def render_dashboard_tab(analyzer, stats):
     else:
         st.info("No HDS curated assets found in the analyzed code.")
 
+    st.divider()
 
-def render_table_usage_tab(analyzer):
-    """Render the table usage explorer tab."""
-    st.header("Table Dependency Tracker")
+    # Table Usage Explorer
+    st.subheader("📁 Table Usage Explorer")
 
     # Group tables by category
     demographics_tables = [
@@ -321,20 +321,20 @@ def render_table_usage_tab(analyzer):
         col_temporal1, col_temporal2, col_temporal3 = st.columns([1, 1, 1])
 
         with col_temporal1:
-            enable_temporal = st.checkbox("Enable date range filtering", value=False)
+            enable_temporal = st.checkbox("Enable date range filtering", value=False, key="table_explorer_temporal")
 
         start_date = None
         end_date = None
 
         if enable_temporal:
             with col_temporal2:
-                from datetime import datetime, timedelta
                 # Default: last year
                 default_start = datetime.now() - timedelta(days=365)
                 start_date = st.date_input(
                     "Start Date",
                     value=default_start,
-                    help="Files modified on or after this date"
+                    help="Files modified on or after this date",
+                    key="table_explorer_start"
                 )
                 start_date = start_date.isoformat()
 
@@ -342,7 +342,8 @@ def render_table_usage_tab(analyzer):
                 end_date = st.date_input(
                     "End Date",
                     value=datetime.now(),
-                    help="Files modified before this date"
+                    help="Files modified before this date",
+                    key="table_explorer_end"
                 )
                 end_date = end_date.isoformat()
 
@@ -915,7 +916,6 @@ def main():
     # Tabs for different features
     tabs = st.tabs([
         "📊 Dashboard",
-        "📁 Table Usage",
         "⚙️ Function Usage",
         "📦 Module Usage",
         "🔗 Cross-Analysis",
@@ -926,18 +926,15 @@ def main():
         render_dashboard_tab(analyzer, stats)
 
     with tabs[1]:
-        render_table_usage_tab(analyzer)
-
-    with tabs[2]:
         render_function_usage_tab(analyzer)
 
-    with tabs[3]:
+    with tabs[2]:
         render_module_usage_tab(analyzer)
 
-    with tabs[4]:
+    with tabs[3]:
         render_cross_analysis_tab(analyzer)
 
-    with tabs[5]:
+    with tabs[4]:
         render_documentation_tab()
 
 
