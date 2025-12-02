@@ -447,13 +447,6 @@ def render_function_usage_tab(analyzer):
 
                     st.divider()
 
-                    # Files by type
-                    st.markdown("**Files by Type:**")
-                    for file_type, files in func_data['files_by_type'].items():
-                        st.markdown(f"- {file_type}: {len(files)} files")
-
-                    st.divider()
-
                     # Sample files
                     st.markdown("**Example Files:**")
                     for file_info in func_data['all_files'][:5]:
@@ -486,17 +479,6 @@ def render_module_usage_tab(analyzer):
             st.subheader("Repositories")
             for repo in usage['repos']:
                 st.markdown(f"- `{repo}`")
-
-            st.divider()
-
-            # Files by type
-            st.subheader("Files by Type")
-            for file_type, files in usage['files_by_type'].items():
-                with st.expander(f"{file_type}: {len(files)} files"):
-                    for file_info in files[:10]:
-                        st.code(f"{file_info['repo']}/{file_info['file']}", language="text")
-                        if 'import' in file_info:
-                            st.caption(f"Import: {file_info['import']}")
 
 
 def render_documentation_tab():
