@@ -134,8 +134,105 @@ def render_dashboard_tab(analyzer, stats):
 
     st.divider()
 
-    # Tracked tables with usage
-    st.subheader("HDS Curated Assets Usage")
+    # Temporal Analysis Section
+    st.subheader("⏰ Temporal Analysis")
+
+    from datetime import datetime, timedelta
+
+    col_period1, col_period2, col_period3 = st.columns([1, 1, 1])
+
+    with col_period1:
+        enable_dashboard_temporal = st.checkbox("Enable temporal filtering", value=False, key="dashboard_temporal")
+
+    dashboard_start_date = None
+    dashboard_end_date = None
+
+    if enable_dashboard_temporal:
+        with col_period2:
+            # Default: last year
+            default_start = datetime.now() - timedelta(days=365)
+            dashboard_start_date = st.date_input(
+                "Start Date",
+                value=default_start,
+                help="Show activity from this date onwards",
+                key="dashboard_start"
+            )
+            dashboard_start_date = dashboard_start_date.isoformat()
+
+        with col_period3:
+            dashboard_end_date = st.date_input(
+                "End Date",
+                value=datetime.now(),
+                help="Show activity before this date",
+                key="dashboard_end"
+            )
+            dashboard_end_date = dashboard_end_date.isoformat()
+
+        # Show temporal metrics
+        active_repos = analyzer.get_repos_active_in_period(dashboard_start_date, dashboard_end_date)
+
+        st.divider()
+
+        col_temp1, col_temp2 = st.columns(2)
+        with col_temp1:
+            st.metric(
+                "Active Repositories in Period",
+                len(active_repos),
+                help="Repositories with files modified during selected period"
+            )
+        with col_temp2:
+            percentage = (len(active_repos) / stats['total_repos'] * 100) if stats['total_repos'] > 0 else 0
+            st.metric(
+                "Activity Rate",
+                f"{percentage:.1f}%",
+                help="Percentage of repositories active in period"
+            )
+
+        if active_repos:
+            with st.expander(f"📋 View Active Repositories ({len(active_repos)})"):
+                for repo in active_repos:
+                    st.markdown(f"- `{repo}`")
+
+        st.divider()
+
+        # Show table usage in period
+        st.subheader("📊 Most Used Tables in Period")
+
+        # Get usage for tracked tables in the period
+        tracked_tables_in_period = {}
+        for table in analyzer.TRACKED_TABLES:
+            usage = analyzer.get_table_usage_in_period(table, dashboard_start_date, dashboard_end_date)
+            if usage['total_repos'] > 0:
+                tracked_tables_in_period[table] = usage['total_repos']
+
+        if tracked_tables_in_period:
+            period_df = pd.DataFrame([
+                {"Table": k, "Repos Using": v}
+                for k, v in tracked_tables_in_period.items()
+            ]).sort_values('Repos Using', ascending=False)
+
+            fig = px.bar(
+                period_df.head(10),
+                y='Table',
+                x='Repos Using',
+                orientation='h',
+                title=f"Top Tables Used in Selected Period",
+                color='Repos Using',
+                color_continuous_scale='Greens'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            with st.expander("📋 View All Tables in Period"):
+                st.dataframe(period_df, use_container_width=True)
+        else:
+            st.info("No tracked table usage found in the selected period.")
+    else:
+        st.info("💡 Enable temporal filtering to see repository activity and table usage over time.")
+
+    st.divider()
+
+    # Tracked tables with usage (all-time)
+    st.subheader("HDS Curated Assets Usage (All-Time)")
 
     if stats['tracked_tables_found']:
         tables_df = pd.DataFrame([
