@@ -36,6 +36,9 @@ class CodeMetadata:
     # File classification
     file_type: str = "unknown"  # 'curation', 'analysis', 'notebook', etc.
 
+    # Temporal information
+    last_modified: Optional[str] = None  # ISO format date string
+
     # Raw content for semantic search
     content: str = ""
 
@@ -518,6 +521,9 @@ class CodeAnalyzer:
             # Analyze file
             code_meta = self.analyze_file(content, file_path, repo)
 
+            # Add temporal metadata
+            code_meta.last_modified = metadata.get("last_modified")
+
             # Store in metadata dict
             self.metadata[repo][file_path] = code_meta
 
@@ -732,6 +738,131 @@ class CodeAnalyzer:
             "tracked_tables_count": len(tracked_tables_found)
         }
 
+    def get_table_usage_in_period(self, table: str, start_date: str = None, end_date: str = None) -> Dict:
+        """Get table usage filtered by time period.
+
+        Args:
+            table: Table name to search for
+            start_date: Start date in ISO format (e.g., "2023-01-01"), inclusive
+            end_date: End date in ISO format (e.g., "2024-01-01"), exclusive
+
+        Returns:
+            Dictionary with repos, files, and temporal statistics
+        """
+        from datetime import datetime
+
+        all_files = self.table_to_files.get(table, [])
+        filtered_files = []
+        repos_in_period = set()
+
+        for file_info in all_files:
+            # Get file metadata to check last_modified
+            repo = file_info['repo']
+            file_path = file_info['file']
+
+            if repo in self.metadata and file_path in self.metadata[repo]:
+                file_meta = self.metadata[repo][file_path]
+                last_modified = file_meta.last_modified
+
+                if last_modified:
+                    try:
+                        file_date = datetime.fromisoformat(last_modified.replace('Z', '+00:00'))
+
+                        # Apply date filters
+                        if start_date and file_date < datetime.fromisoformat(start_date):
+                            continue
+                        if end_date and file_date >= datetime.fromisoformat(end_date):
+                            continue
+
+                        filtered_files.append({
+                            **file_info,
+                            'last_modified': last_modified
+                        })
+                        repos_in_period.add(repo)
+                    except (ValueError, AttributeError):
+                        # If date parsing fails, include the file (no date info)
+                        filtered_files.append(file_info)
+                else:
+                    # No date info, include it
+                    filtered_files.append(file_info)
+
+        return {
+            "table": table,
+            "total_repos": len(repos_in_period),
+            "total_files": len(filtered_files),
+            "repos": sorted(repos_in_period),
+            "files": filtered_files,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+
+    def get_repos_active_in_period(self, start_date: str = None, end_date: str = None) -> List[str]:
+        """Get repositories that were active (modified) in a time period.
+
+        Args:
+            start_date: Start date in ISO format
+            end_date: End date in ISO format
+
+        Returns:
+            List of repository names
+        """
+        from datetime import datetime
+
+        active_repos = set()
+
+        for repo, files in self.metadata.items():
+            for file_meta in files.values():
+                if file_meta.last_modified:
+                    try:
+                        file_date = datetime.fromisoformat(file_meta.last_modified.replace('Z', '+00:00'))
+
+                        # Check if file was modified in period
+                        if start_date and file_date < datetime.fromisoformat(start_date):
+                            continue
+                        if end_date and file_date >= datetime.fromisoformat(end_date):
+                            continue
+
+                        active_repos.add(repo)
+                        break  # Found one file in period, repo is active
+                    except (ValueError, AttributeError):
+                        continue
+
+        return sorted(active_repos)
+
+    def get_adoption_timeline(self, table: str) -> Dict[str, int]:
+        """Get adoption timeline for a table (by year-month).
+
+        Args:
+            table: Table name
+
+        Returns:
+            Dictionary mapping year-month to count of repos using table
+        """
+        from datetime import datetime
+        from collections import defaultdict
+
+        timeline = defaultdict(set)  # year-month -> set of repos
+
+        all_files = self.table_to_files.get(table, [])
+
+        for file_info in all_files:
+            repo = file_info['repo']
+            file_path = file_info['file']
+
+            if repo in self.metadata and file_path in self.metadata[repo]:
+                file_meta = self.metadata[repo][file_path]
+
+                if file_meta.last_modified:
+                    try:
+                        file_date = datetime.fromisoformat(file_meta.last_modified.replace('Z', '+00:00'))
+                        year_month = file_date.strftime('%Y-%m')
+                        timeline[year_month].add(repo)
+                    except (ValueError, AttributeError):
+                        continue
+
+        # Convert sets to counts
+        return {period: len(repos) for period, repos in sorted(timeline.items())}
+
     def _save_cache(self):
         """Save metadata to cache file."""
         try:
@@ -747,6 +878,7 @@ class CodeAnalyzer:
                             "imports": list(meta.imports),
                             "function_calls": list(meta.function_calls),
                             "file_type": meta.file_type,
+                            "last_modified": meta.last_modified,
                         }
                         for file_path, meta in files.items()
                     }
@@ -806,6 +938,7 @@ class CodeAnalyzer:
                         imports=set(meta_dict["imports"]),
                         function_calls=set(meta_dict["function_calls"]),
                         file_type=meta_dict["file_type"],
+                        last_modified=meta_dict.get("last_modified"),
                     )
                     self.metadata[repo][file_path] = meta
 

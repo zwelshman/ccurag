@@ -217,12 +217,56 @@ def render_table_usage_tab(analyzer):
     selected_table = st.selectbox("Select Table", table_list)
 
     if selected_table:
-        usage = analyzer.get_table_usage(selected_table)
+        # Temporal filtering options
+        st.divider()
+        st.subheader("⏰ Temporal Filters")
+
+        col_temporal1, col_temporal2, col_temporal3 = st.columns([1, 1, 1])
+
+        with col_temporal1:
+            enable_temporal = st.checkbox("Enable date range filtering", value=False)
+
+        start_date = None
+        end_date = None
+
+        if enable_temporal:
+            with col_temporal2:
+                from datetime import datetime, timedelta
+                # Default: last year
+                default_start = datetime.now() - timedelta(days=365)
+                start_date = st.date_input(
+                    "Start Date",
+                    value=default_start,
+                    help="Files modified on or after this date"
+                )
+                start_date = start_date.isoformat()
+
+            with col_temporal3:
+                end_date = st.date_input(
+                    "End Date",
+                    value=datetime.now(),
+                    help="Files modified before this date"
+                )
+                end_date = end_date.isoformat()
+
+        st.divider()
+
+        # Get usage data (with or without temporal filters)
+        if enable_temporal:
+            usage = analyzer.get_table_usage_in_period(selected_table, start_date, end_date)
+        else:
+            usage = analyzer.get_table_usage(selected_table)
 
         if usage['total_repos'] == 0:
-            st.warning(f"❌ No usage found for `{selected_table}`")
+            if enable_temporal:
+                st.warning(f"❌ No usage found for `{selected_table}` in the selected time period")
+            else:
+                st.warning(f"❌ No usage found for `{selected_table}`")
         else:
-            st.success(f"✅ **{selected_table}** is used in **{usage['total_repos']}** repositories")
+            if enable_temporal:
+                st.success(f"✅ **{selected_table}** was used in **{usage['total_repos']}** repositories during the selected period")
+            else:
+                st.success(f"✅ **{selected_table}** is used in **{usage['total_repos']}** repositories")
 
             # Metrics
             col1, col2 = st.columns(2)
@@ -232,6 +276,35 @@ def render_table_usage_tab(analyzer):
                 st.metric("Total Files", usage['total_files'])
 
             st.divider()
+
+            # Adoption timeline chart
+            if not enable_temporal:
+                st.subheader("📈 Adoption Timeline")
+                timeline_data = analyzer.get_adoption_timeline(selected_table)
+
+                if timeline_data:
+                    timeline_df = pd.DataFrame([
+                        {"Period": period, "Repositories": count}
+                        for period, count in timeline_data.items()
+                    ]).sort_values("Period")
+
+                    fig = px.line(
+                        timeline_df,
+                        x="Period",
+                        y="Repositories",
+                        title=f"Table Usage Over Time: {selected_table}",
+                        markers=True
+                    )
+                    fig.update_layout(
+                        xaxis_title="Year-Month",
+                        yaxis_title="Number of Repositories",
+                        hovermode="x unified"
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No temporal data available for this table.")
+
+                st.divider()
 
             # Repositories using this table
             st.subheader("Repositories")

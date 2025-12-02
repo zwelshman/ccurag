@@ -97,6 +97,18 @@ class GitHubIndexer:
                         if any(file_content.name.endswith(ext) for ext in Config.INDEXED_FILE_EXTENSIONS):
                             try:
                                 content = file_content.decoded_content.decode('utf-8')
+
+                                # Get last commit date for this file
+                                last_modified = None
+                                try:
+                                    commits = repo.get_commits(path=file_content.path)
+                                    if commits.totalCount > 0:
+                                        last_commit = commits[0]
+                                        last_modified = last_commit.commit.author.date.isoformat()
+                                except GithubException:
+                                    # If we can't get commits, use current time as fallback
+                                    pass
+
                                 documents.append({
                                     "content": content,
                                     "metadata": {
@@ -105,6 +117,7 @@ class GitHubIndexer:
                                         "type": "file",
                                         "url": file_content.html_url,
                                         "path": file_content.path,
+                                        "last_modified": last_modified,
                                     }
                                 })
                             except (UnicodeDecodeError, GithubException):
