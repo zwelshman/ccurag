@@ -635,4 +635,324 @@ def render_documentation_page():
               ↓
         Generated Answer + Source Citations
         ```
+        """)
 
+    # Tab 2: How It Works
+    with doc_tabs[1]:
+        st.header("How The System Works")
+
+        st.subheader("1. RAG (Retrieval-Augmented Generation)")
+        st.markdown("""
+        **RAG** solves the problem of LLMs not knowing about your specific codebase by:
+
+        1. **Retrieval**: Finding relevant documents from your repositories
+        2. **Augmentation**: Adding those documents as context to the prompt
+        3. **Generation**: Having the LLM generate an answer based on that context
+
+        **Why RAG?**
+        - LLMs have a knowledge cutoff and don't know about your private repos
+        - RAG provides factual, source-cited answers from your actual code
+        - Updates are easy: re-index repositories, no need to retrain models
+        """)
+
+        st.subheader("2. Hybrid Search (BM25 + Vector)")
+        st.markdown("""
+        This system uses **hybrid retrieval** combining two search methods:
+
+        #### BM25 (Best Matching 25)
+        - **Type**: Keyword-based lexical search
+        - **Strengths**:
+          - Exact term matching (function names like `get_user_data`)
+          - Acronyms and identifiers (`HES`, `COVID_19`)
+          - Code-specific tokens
+        - **How it works**: TF-IDF scoring with document length normalization
+
+        #### Vector Semantic Search
+        - **Type**: Embedding-based similarity search
+        - **Strengths**:
+          - Understanding meaning and context
+          - Paraphrased queries ("find authentication code" → matches "login functions")
+          - Conceptual relationships
+        - **How it works**:
+          1. Convert text to 768-dimensional embeddings using `BAAI/llm-embedder`
+          2. Store embeddings in Pinecone vector database
+          3. Find most similar embeddings using cosine similarity
+
+        #### Hybrid Combination
+        ```python
+        # Adaptive weight calculation based on query type
+        if query_has_code_patterns(query):  # CamelCase, snake_case, ()
+            weights = (0.7, 0.3)  # Favor BM25
+        else:
+            weights = (0.3, 0.7)  # Favor vector search
+
+        # Combine scores
+        final_score = (bm25_weight * bm25_score) + (vector_weight * vector_score)
+        ```
+
+        **Result**: Best of both worlds! Code queries get exact matches, conceptual queries get semantic understanding.
+        """)
+
+        st.subheader("3. Data Storage & Persistence")
+        st.markdown("""
+        #### Pinecone (Vector Database)
+        - **Purpose**: Store document embeddings in the cloud
+        - **Persistence**: Data remains across app restarts
+        - **Advantages**:
+          - Managed service (no infrastructure)
+          - Fast similarity search (<50ms)
+          - Scalable (handles millions of vectors)
+
+        #### Local Cache Storage
+        - `.cache/bm25_index.pkl`: BM25 index (50-100MB) - runtime cache
+        - `data_index/bm25_index.pkl`: Committed BM25 index
+        - **Persistence**: Cache files can be committed to Git via `data_index/` folder
+        - **How it works**:
+          1. Build indices locally - saved to `.cache/`
+          2. For sharing: copy files to `data_index/` and commit to Git
+          3. App checks `data_index/` first (committed), then `.cache/` (runtime)
+          4. Subsequent runs load from available location instantly
+        """)
+
+    # Tab 3: Technologies
+    with doc_tabs[2]:
+        st.header("Technologies & Tools")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("Core Technologies")
+            st.markdown("""
+            #### Anthropic Claude API
+            - **Model**: `claude-sonnet-4-5`
+            - **Purpose**: Generate natural language answers from context
+            - **Features**:
+              - 200K token context window (fits ~500 pages of code)
+              - High accuracy for technical content
+              - Strong instruction following
+
+            #### Pinecone Vector Database
+            - **Type**: Managed vector database
+            - **Index**: Serverless, auto-scaling
+            - **Dimensions**: 768 (matching embedding model)
+            - **Metric**: Cosine similarity
+            - **Region**: AWS us-east-1
+
+            #### Sentence Transformers
+            - **Model**: `BAAI/llm-embedder`
+            - **Output**: 768-dimensional dense vectors
+            - **Optimization**: Fine-tuned for retrieval tasks
+            - **Speed**: ~100 docs/second on CPU
+
+            #### BM25 (rank-bm25)
+            - **Algorithm**: Okapi BM25
+            - **Parameters**: k1=1.5, b=0.75 (default)
+            - **Tokenization**: Custom code-aware tokenizer
+              - CamelCase splitting
+              - snake_case preservation
+              - Stop word removal
+            """)
+
+        with col2:
+            st.subheader("Supporting Technologies")
+            st.markdown("""
+            #### Streamlit
+            - **Purpose**: Web interface
+            - **Features**:
+              - Reactive UI components
+              - Session state management
+              - Resource caching (`@st.cache_resource`)
+
+            #### File Processing
+            - **Text parsing**: Python, R, SQL, Markdown files
+            - **Pattern matching**: Efficient content extraction
+
+            #### GitHub API (PyGithub)
+            - **Purpose**: Fetch repository contents
+            - **Rate limits**: 60/hour (unauth), 5000/hour (with token)
+            - **Indexed file types**:
+              - Documentation: `.md`, `.rst`, `.txt`
+              - Code: `.py`, `.r`, `.R`, `.sql`
+              - Data: `.csv`, `.json`, `.yaml`
+              - Notebooks: `.ipynb`
+
+            #### Git Version Control
+            - **Purpose**: Persist caches and share across deployments
+            - **Storage**: Cache files committed to Git repository
+            """)
+
+        st.divider()
+
+        st.subheader("Why These Choices?")
+        st.markdown("""
+        | Component | Why This Choice | Alternatives Considered |
+        |-----------|----------------|------------------------|
+        | **Claude** | Best accuracy for technical content, large context window | GPT-4, open-source LLMs |
+        | **Pinecone** | Managed, no infrastructure, excellent docs | Weaviate, Qdrant, ChromaDB |
+        | **BM25** | Fast, proven for code search, no training needed | Elasticsearch, custom scoring |
+        | **Streamlit** | Rapid prototyping, Python-native, easy deployment | Gradio, Flask, FastAPI |
+        | **llm-embedder** | Optimized for retrieval, good quality/speed balance | OpenAI embeddings, E5, BGE |
+        """)
+
+    # Tab 4: Future Enhancements
+    with doc_tabs[3]:
+        st.header("Future Enhancements")
+
+        st.markdown("""
+        Based on this proof-of-concept, here are potential improvements and extensions:
+        """)
+
+        st.subheader("🎯 Short-term Enhancements (1-3 months)")
+
+        with st.expander("1. Enhanced Code Understanding"):
+            st.markdown("""
+            - **Call graph analysis**: Map function dependencies across repos
+            - **Data flow tracking**: Trace how data moves through pipelines
+            - **Import resolution**: Understand cross-repo dependencies
+            - **Complexity metrics**: Calculate cyclomatic complexity, LOC
+            - **Dead code detection**: Find unused functions/variables
+
+            **Impact**: Deeper insights into code architecture and maintainability
+            """)
+
+        with st.expander("2. Improved Search Quality"):
+            st.markdown("""
+            - **Query expansion**: Add synonyms and related terms automatically
+            - **Re-ranking**: Use cross-encoder for final result reordering
+            - **Negative examples**: Learn from poorly ranked results
+            - **Query classification**: Route different query types to optimal retrievers
+            - **Result deduplication**: Remove near-duplicate code snippets
+
+            **Impact**: Higher accuracy, fewer irrelevant results, better user experience
+            """)
+
+        with st.expander("3. User Experience Improvements"):
+            st.markdown("""
+            - **Conversation history**: Maintain context across multiple questions
+            - **Follow-up suggestions**: Auto-generate relevant next questions
+            - **Filters**: Filter by repo, date, file type, language
+            - **Syntax highlighting**: Pretty code display in results
+            - **Direct GitHub links**: Jump to exact line in GitHub UI
+            - **Export results**: Download answers as PDF/Markdown
+
+            **Impact**: More efficient workflows, better productivity
+            """)
+
+        st.subheader("🚀 Medium-term Enhancements (3-6 months)")
+
+        with st.expander("4. Advanced Analytics"):
+            st.markdown("""
+            - **Temporal analysis**: Track how code evolves over time
+            - **Contributor insights**: Who writes what type of code?
+            - **Pattern detection**: Automatically find common patterns/anti-patterns
+            - **Impact analysis**: Predict affected repos from proposed changes
+            - **Test coverage mapping**: Link tests to source code
+
+            **Impact**: Strategic insights for technical leadership
+            """)
+
+        with st.expander("5. Automated Code Quality"):
+            st.markdown("""
+            - **Style consistency checker**: Flag deviations from org standards
+            - **Security scanning**: Detect potential vulnerabilities
+            - **Dependency audit**: Track outdated or risky dependencies
+            - **Documentation coverage**: Find undocumented code
+            - **Best practice suggestions**: Recommend improvements based on org patterns
+
+            **Impact**: Higher code quality, reduced technical debt
+            """)
+
+        with st.expander("6. Multi-modal Capabilities"):
+            st.markdown("""
+            - **Diagram understanding**: Parse architecture diagrams, flowcharts
+            - **Screenshot analysis**: Extract info from images in README files
+            - **Notebook support**: Deep analysis of Jupyter notebooks
+            - **API spec parsing**: Index OpenAPI/Swagger specs
+            - **Database schema visualization**: Auto-generate ERDs
+
+            **Impact**: Handle more diverse documentation formats
+            """)
+
+        st.subheader("🌟 Long-term Vision (6-12 months)")
+
+        with st.expander("7. AI-Powered Code Generation"):
+            st.markdown("""
+            - **Template generation**: Create boilerplate based on org patterns
+            - **Code completion**: Suggest context-aware code snippets
+            - **Refactoring suggestions**: Propose improvements with diffs
+            - **Test generation**: Auto-create tests for uncovered code
+            - **Documentation generation**: Auto-write docstrings, READMEs
+
+            **Impact**: Accelerate development, ensure consistency
+            """)
+
+        with st.expander("8. Collaborative Features"):
+            st.markdown("""
+            - **Shared annotations**: Team members add notes to code
+            - **Question history**: Searchable log of all Q&A sessions
+            - **Expert routing**: Auto-tag questions for relevant team members
+            - **Learning paths**: Curated sequences for onboarding
+            - **Code review insights**: Surface relevant context during review
+
+            **Impact**: Better knowledge sharing, faster onboarding
+            """)
+
+        with st.expander("9. Integration Ecosystem"):
+            st.markdown("""
+            - **VS Code extension**: Search codebase from IDE
+            - **Slack/Teams bot**: Answer questions in chat
+            - **GitHub Actions integration**: Auto-update indices on push
+            - **JIRA/Linear integration**: Link tickets to related code
+            - **CI/CD integration**: Validate changes against org patterns
+            - **API endpoints**: Programmatic access to all features
+
+            **Impact**: Seamless workflow integration
+            """)
+
+        with st.expander("10. Advanced RAG Techniques"):
+            st.markdown("""
+            - **Hierarchical retrieval**: Coarse-to-fine document selection
+            - **Multi-hop reasoning**: Chain multiple lookups for complex questions
+            - **Agentic workflows**: LLM decides which tools to use
+            - **Active learning**: Learn from user feedback to improve ranking
+            - **Personalization**: Adapt to individual user preferences
+
+            **Impact**: Handle more complex queries, better accuracy
+            """)
+
+        st.divider()
+
+        st.subheader("📊 Success Metrics")
+        st.markdown("""
+        To evaluate these enhancements, track:
+
+        - **User Engagement**: Daily active users, questions per session
+        - **Answer Quality**: Thumbs up/down ratings, citation accuracy
+        - **Time Saved**: Onboarding time, time to find info
+        - **Code Quality**: Reduction in bugs, style violations, duplicates
+        - **Adoption**: % of team using tool, % of repos indexed
+        """)
+
+
+def main():
+    """Main application with page navigation."""
+    # Sidebar navigation
+    with st.sidebar:
+        st.title("Navigation")
+        page = st.radio(
+            "Go to",
+            ["Q&A", "Documentation", "Setup"],
+            index=0 if check_vector_store_exists() else 2,
+        )
+
+    # Render the selected page
+    if page == "Q&A":
+        render_qa_page()
+    elif page == "Documentation":
+        render_documentation_page()
+    elif page == "Setup":
+        render_admin_page()
+
+
+if __name__ == "__main__":
+    main()
