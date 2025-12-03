@@ -749,11 +749,19 @@ class CodeAnalyzer:
         Returns:
             Dictionary with repos, files, and temporal statistics
         """
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         all_files = self.table_to_files.get(table, [])
         filtered_files = []
         repos_in_period = set()
+
+        # Parse filter dates and make them timezone-aware (UTC)
+        filter_start = None
+        filter_end = None
+        if start_date:
+            filter_start = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+        if end_date:
+            filter_end = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
 
         for file_info in all_files:
             # Get file metadata to check last_modified
@@ -769,9 +777,9 @@ class CodeAnalyzer:
                         file_date = datetime.fromisoformat(last_modified.replace('Z', '+00:00'))
 
                         # Apply date filters
-                        if start_date and file_date < datetime.fromisoformat(start_date):
+                        if filter_start and file_date < filter_start:
                             continue
-                        if end_date and file_date >= datetime.fromisoformat(end_date):
+                        if filter_end and file_date >= filter_end:
                             continue
 
                         filtered_files.append({
@@ -806,9 +814,17 @@ class CodeAnalyzer:
         Returns:
             List of repository names
         """
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         active_repos = set()
+
+        # Parse filter dates and make them timezone-aware (UTC)
+        filter_start = None
+        filter_end = None
+        if start_date:
+            filter_start = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+        if end_date:
+            filter_end = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
 
         for repo, files in self.metadata.items():
             for file_meta in files.values():
@@ -817,9 +833,9 @@ class CodeAnalyzer:
                         file_date = datetime.fromisoformat(file_meta.last_modified.replace('Z', '+00:00'))
 
                         # Check if file was modified in period
-                        if start_date and file_date < datetime.fromisoformat(start_date):
+                        if filter_start and file_date < filter_start:
                             continue
-                        if end_date and file_date >= datetime.fromisoformat(end_date):
+                        if filter_end and file_date >= filter_end:
                             continue
 
                         active_repos.add(repo)
