@@ -213,7 +213,7 @@ class QASystem:
 
 ### 5. Local Storage (`cloud_storage.py`)
 
-**Purpose**: Persist BM25 index and code metadata in local filesystem.
+**Purpose**: Persist BM25 index in local filesystem.
 
 **Key Responsibilities**:
 - Save/load pickle and JSON files
@@ -255,11 +255,6 @@ class QASystem:
    ├─→ Build BM25Okapi index
    └─→ Cache to `.cache/bm25_index.pkl` (copy to `data_index/` folder and commit to Git for sharing)
 
-7. Build Code Metadata (Separate step)
-   ├─→ Fetch all repos
-   ├─→ Parse Python/R/SQL files with AST
-   ├─→ Extract tables, functions, imports
-   └─→ Cache to `.cache/code_metadata.json` (copy to `data_index/` folder and commit to Git for sharing)
 ```
 
 ### Q&A Query Phase (Runtime)
@@ -318,9 +313,6 @@ class QASystem:
     └─→ Answer + source documents with metadata
 ```
 
-### Code Intelligence Query Phase (Runtime)
-
-```
 1. User selects structured query
    └─→ Example: "Show usage of hds_curated_assets__deaths_single"
 
@@ -704,9 +696,7 @@ Multiple studies show hybrid search outperforms single methods:
 
 **What's Stored Locally**:
 - `.cache/bm25_index.pkl`: BM25 search index (50-100MB, runtime cache)
-- `.cache/code_metadata.json`: Code intelligence data (5-20MB, runtime cache)
-- `data_index/bm25_index.pkl`: Committed BM25 index (optional, for sharing)
-- `data_index/code_metadata.json`: Committed metadata (optional, for sharing)
+- `data_index/bm25_index.pkl`: Committed BM25 index (optional, for sharing via Git)
 
 **Implementation**:
 ```python
@@ -750,11 +740,6 @@ Check for committed cache (data_index/)
 - Context formatting: 10ms
 - Claude API call: 1-2 seconds
 - Response parsing: 10ms
-
-**Code Intelligence Query** (total: <100ms):
-- Load metadata from cache: 50ms
-- Hash lookup: <1ms
-- Format results: 10ms
 
 ### Optimization Strategies
 
@@ -834,8 +819,7 @@ This architecture combines the best of multiple approaches:
 
 1. **RAG** for natural language understanding and flexibility
 2. **Hybrid Search** for accuracy on both code and conceptual queries
-3. **Static Analysis** for deterministic code intelligence
-4. **Dual Storage Strategy**: Pinecone cloud for vectors, local filesystem with optional Git-based sharing for indices
+3. **Dual Storage Strategy**: Pinecone cloud for vectors, local filesystem with optional Git-based sharing for indices
 
 **Result**: A production-ready system that's fast, accurate, and cost-effective for exploring code repositories.
 

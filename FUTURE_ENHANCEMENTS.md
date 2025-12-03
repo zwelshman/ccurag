@@ -700,9 +700,9 @@ Step 3: Synthesize findings
 
 **Tools**:
 - `search_code(query)`: Semantic search
-- `get_table_usage(table)`: Code intelligence
 - `get_function_definition(func)`: Lookup function
 - `analyze_file(file)`: Deep dive into specific file
+- `find_similar(pattern)`: Pattern matching
 
 **Flow**:
 ```
@@ -794,7 +794,7 @@ Result: 5 phenotyping scripts in 3 repos use COVID data
 
 ## Conclusion
 
-These enhancements would transform the proof-of-concept into a comprehensive **code intelligence platform** that:
+These enhancements would transform the proof-of-concept into a comprehensive **code exploration platform** that:
 
 1. **Accelerates development**: Templates, test generation, code completion
 2. **Improves quality**: Automated checks, style enforcement, security scanning

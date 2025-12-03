@@ -159,24 +159,6 @@ final_score = (bm25_weight * bm25_score) + (vector_weight * vector_score)
 
 **Research Support**: Studies show hybrid search achieves 75-85% accuracy vs. 60-70% for vector-only or BM25-only on code search tasks.
 
-### How Code Intelligence Works
-
-**Static Analysis** provides deterministic code intelligence without LLMs:
-
-1. **Parsing**: Use Python AST, R regex, and SQL pattern matching to parse code files
-2. **Extraction**: Extract structured metadata:
-   - Table references (e.g., `hds_curated_assets__demographics`)
-   - Function calls (e.g., `hds_functions.curate_data()`)
-   - Module imports (e.g., `import pandas`)
-3. **Indexing**: Build reverse indices for fast lookups (table → repos, function → repos)
-4. **Querying**: O(1) hash lookups return exact repos, files, and line numbers
-
-**Advantages**:
-- Instant results (<100ms)
-- No API costs
-- Exact results (not probabilistic)
-- Perfect for dependency tracking and usage audits
-
 ## Prerequisites
 
 - Python 3.9 or higher
@@ -403,7 +385,6 @@ GITHUB_TOKEN=your_github_token
 - **BM25** (`rank-bm25`): Keyword-based lexical search
 - **Streamlit**: Web application framework for UI
 - **PyGithub**: GitHub API library for fetching repositories
-- **Python AST**: Static analysis for code parsing
 - **Git**: Version control for cache persistence and sharing
 
 **For detailed technical information, see [ARCHITECTURE.md](ARCHITECTURE.md).**
@@ -445,11 +426,10 @@ This project is for educational and research purposes. Please respect the licens
 Contributions are welcome! Please submit a Pull Request.
 
 Areas where contributions would be especially valuable:
-- Additional code analyzers (e.g., Java, JavaScript, SQL dialects)
 - Improved tokenization for domain-specific languages
-- New visualization types for code intelligence
 - Enhanced prompt engineering for better answer quality
 - Performance optimizations for large codebases
+- Better visualization of search results
 
 ## 💬 Support
 
